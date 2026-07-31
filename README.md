@@ -119,7 +119,7 @@ npm run dev
 - **検索** — 優先課題をキーワード横断検索
 - **法人カルテ** — 企業別の商談履歴を集約表示
 
-本番デプロイの手順は `DEPLOYMENT.md` を参照してください（Fly.io + Vercel、無料枠で構築可能）。
+本番デプロイの手順は `DEPLOYMENT.md` を参照してください（バックエンド: Fly.io、フロントエンド: GitHub Pages または Vercel、いずれも無料枠で構築可能）。GitHub Pages は静的ファイルのみ配信できるため、バックエンド（FastAPI + Whisper + SQLite）は別途サーバーが必要です。
 
 ### CLI
 

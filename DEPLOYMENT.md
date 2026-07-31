@@ -2,8 +2,10 @@
 
 このプロジェクトは以下の2つを別々にデプロイします。
 
-- **バックエンド（FastAPI）** → Fly.io（無料枠あり）
-- **フロントエンド（Next.js + HeroUI）** → Vercel（無料）
+- **バックエンド（FastAPI + Whisper + SQLite）** → Fly.io（無料枠あり）
+- **フロントエンド（Next.js + HeroUI）** → **GitHub Pages**（無料・GitHub Actionsで自動デプロイ）または Vercel
+
+> **注意**: GitHub Pages は静的ファイル（HTML/CSS/JS）しか配信できません。Python サーバー・Whisper・SQLite を動かすバックエンドは GitHub Pages では動作しないため、フロントエンドだけを GitHub Pages に置き、バックエンドは Fly.io など何らかのサーバーで動かす必要があります。
 
 ---
 
@@ -44,11 +46,11 @@ curl https://discussion-api.fly.dev/api/health
 
 ### CORS の許可オリジンを更新
 
-`fly.toml` の `CORS_ORIGINS` を実際のフロントエンドURLに変更してから再デプロイ:
+`fly.toml` の `CORS_ORIGINS` を実際のフロントエンドURLに変更してから再デプロイ（GitHub Pages の場合はプロジェクトページのURL、例: `https://<owner>.github.io`）:
 
 ```toml
 [env]
-  CORS_ORIGINS = "https://your-app.vercel.app"
+  CORS_ORIGINS = "https://<owner>.github.io"
 ```
 
 ```bash
@@ -57,7 +59,52 @@ flyctl deploy
 
 ---
 
-## 2. フロントエンド（Vercel）
+## 2. フロントエンド（GitHub Pages — 推奨）
+
+`web/` を静的サイトとしてビルドし、`.github/workflows/deploy-pages.yml` で自動デプロイします。設定済みのファイルは以下の通りです:
+
+- `web/next.config.ts` — `output: "export"` で静的エクスポート。`GITHUB_PAGES=true` のときだけ `basePath`/`assetPrefix` を `/discussion`（リポジトリ名）に設定
+- `.github/workflows/deploy-pages.yml` — push 時に `web/` をビルドして GitHub Pages にデプロイ
+
+### 手順
+
+1. **リポジトリ設定を有効化**
+   GitHub リポジトリ → Settings → Pages → Source を **GitHub Actions** に設定
+
+2. **バックエンドURLを Variables に登録**
+   Settings → Secrets and variables → Actions → Variables タブ → New repository variable
+
+   ```
+   Name:  NEXT_PUBLIC_API_URL
+   Value: https://discussion-api.fly.dev
+   ```
+
+3. **`main` ブランチに push（または手動実行）**
+
+   ```bash
+   git push origin main
+   ```
+
+   もしくは Actions タブから `Deploy Frontend to GitHub Pages` を `workflow_dispatch` で手動実行。
+
+4. **公開URLを確認**
+
+   `https://<owner>.github.io/discussion/` でアクセスできます（リポジトリ名が `discussion` でない場合は `web/next.config.ts` の `repoName` を実際のリポジトリ名に合わせてください）。
+
+### ローカルで GitHub Pages 相当のビルドを試す
+
+```bash
+cd web
+GITHUB_PAGES=true NEXT_PUBLIC_API_URL=https://discussion-api.fly.dev npm run build
+# web/out/ に静的ファイルが生成される
+npx serve out  # or any static file server
+```
+
+---
+
+## 2b. フロントエンド（Vercel — 代替案）
+
+GitHub Pages の代わりに Vercel を使うことも可能です（`web/vercel.json` を用意済み）。
 
 `web/` ディレクトリが Next.js プロジェクトです。
 
