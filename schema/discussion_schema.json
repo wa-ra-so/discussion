@@ -1,0 +1,463 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Discussion Record Schema",
+  "description": "食べログ営業ディスカッションシートの構造化スキーマ",
+  "type": "object",
+  "required": [
+    "meeting_id",
+    "company_info",
+    "discussions",
+    "priority_issues",
+    "dx_solutions",
+    "next_steps"
+  ],
+  "properties": {
+    "meeting_id": {
+      "type": "string",
+      "description": "商談ID (format: YYYYMMDD_HHMM_company_name)",
+      "pattern": "^[0-9]{8}_[0-9]{4}_.*"
+    },
+    "company_info": {
+      "type": "object",
+      "required": ["name", "contact_name", "date"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "店舗名"
+        },
+        "contact_name": {
+          "type": "string",
+          "description": "接触者氏名"
+        },
+        "contact_phone": {
+          "type": "string",
+          "description": "接触者電話番号"
+        },
+        "contact_email": {
+          "type": "string",
+          "format": "email"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "商談日時"
+        }
+      }
+    },
+    "discussions": {
+      "type": "object",
+      "description": "ディスカッション項目ごとの内容",
+      "properties": {
+        "recruitment": {
+          "type": "object",
+          "description": "①【採用・人手】",
+          "properties": {
+            "assumed_issues": {
+              "type": "string",
+              "description": "想定課題と根拠"
+            },
+            "current_staff": {
+              "type": "object",
+              "description": "現在のスタッフ構成",
+              "properties": {
+                "employees": {
+                  "type": "integer",
+                  "description": "社員数"
+                },
+                "part_time": {
+                  "type": "integer",
+                  "description": "パート・アルバイト数"
+                }
+              }
+            },
+            "ideal_staff": {
+              "type": "object",
+              "description": "理想のスタッフ構成",
+              "properties": {
+                "employees": {
+                  "type": "integer"
+                },
+                "part_time": {
+                  "type": "integer"
+                }
+              }
+            },
+            "operation_structure": {
+              "type": "object",
+              "description": "オペレーション構成（平日/週末）",
+              "properties": {
+                "weekday": {
+                  "type": "string"
+                },
+                "weekend": {
+                  "type": "string"
+                }
+              }
+            },
+            "past_recruitment": {
+              "type": "object",
+              "description": "過去の求人募集状況",
+              "properties": {
+                "methods": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "cost_per_hire": {
+                  "type": "number",
+                  "description": "1人あたりの採用コスト"
+                }
+              }
+            },
+            "recruitment_budget": {
+              "type": "number",
+              "description": "求人の予算"
+            },
+            "desired_talent": {
+              "type": "string",
+              "description": "どういう人材がほしいか"
+            },
+            "hiring_timeline": {
+              "type": "string",
+              "description": "いつまでに採用したいか"
+            },
+            "current_initiatives": {
+              "type": "string",
+              "description": "現状取り組んでいる施策"
+            }
+          }
+        },
+        "sales": {
+          "type": "object",
+          "description": "②【集客・売上】",
+          "properties": {
+            "assumed_issues": {
+              "type": "string",
+              "description": "想定課題と根拠"
+            },
+            "average_customer_spend": {
+              "type": "object",
+              "description": "平均客単価（昼／夜）",
+              "properties": {
+                "lunch": {
+                  "type": "number"
+                },
+                "dinner": {
+                  "type": "number"
+                }
+              }
+            },
+            "seat_utilization": {
+              "type": "object",
+              "description": "席稼働率",
+              "properties": {
+                "weekday": {
+                  "type": "number",
+                  "description": "平日の稼働率（%）"
+                },
+                "weekend": {
+                  "type": "number",
+                  "description": "週末の稼働率（%）"
+                }
+              }
+            },
+            "turnover_rate": {
+              "type": "object",
+              "description": "回転数",
+              "properties": {
+                "weekday": {
+                  "type": "string"
+                },
+                "weekend": {
+                  "type": "string"
+                }
+              }
+            },
+            "fl_ratio": {
+              "type": "number",
+              "description": "FL比率（原価＋人件費）"
+            },
+            "customer_segment": {
+              "type": "string",
+              "description": "客層"
+            },
+            "usage_scenes": {
+              "type": "string",
+              "description": "利用シーン"
+            },
+            "other_media_roi": {
+              "type": "string",
+              "description": "他媒体の費用対効果（SNS/Googleの活用状況を含む）"
+            },
+            "current_initiatives": {
+              "type": "string",
+              "description": "現状取り組んでいる施策"
+            },
+            "pos_system": {
+              "type": "string",
+              "description": "レジシステムの状況"
+            }
+          }
+        },
+        "booking_efficiency": {
+          "type": "object",
+          "description": "③【予約・業務効率】",
+          "properties": {
+            "assumed_issues": {
+              "type": "string",
+              "description": "想定課題と根拠"
+            },
+            "current_reservation_method": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "paper_ledger",
+                  "online_pos",
+                  "google_calendar",
+                  "other"
+                ]
+              }
+            },
+            "net_reservation_status": {
+              "type": "boolean",
+              "description": "ネット予約で全席開放できているか"
+            },
+            "site_controller_usage": {
+              "type": "object",
+              "properties": {
+                "in_use": {
+                  "type": "boolean"
+                },
+                "details": {
+                  "type": "string"
+                }
+              }
+            },
+            "reservation_channels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "tabelog",
+                  "hot_pepper",
+                  "gurunavi",
+                  "ikyu",
+                  "retty",
+                  "sns",
+                  "google",
+                  "homepage",
+                  "other"
+                ]
+              }
+            },
+            "phone_response": {
+              "type": "object",
+              "properties": {
+                "frequency": {
+                  "type": "string",
+                  "enum": [
+                    "frequent",
+                    "occasional",
+                    "sometimes_missed"
+                  ]
+                },
+                "daily_calls": {
+                  "type": "integer",
+                  "description": "1日あたりの平均電話対応本数"
+                }
+              }
+            },
+            "double_booking_issues": {
+              "type": "string",
+              "enum": [
+                "past_occurrence",
+                "no_occurrence_but_worried",
+                "rules_in_place"
+              ]
+            },
+            "ordering_method": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "verbal",
+                  "mobile_order",
+                  "table_tablet",
+                  "ticket_machine",
+                  "pre_payment",
+                  "other"
+                ]
+              }
+            },
+            "pos_system": {
+              "type": "string",
+              "description": "レジシステムの状況"
+            },
+            "current_ordering_method": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "fax",
+                  "phone",
+                  "line_email",
+                  "vendor_web",
+                  "unified_system",
+                  "other"
+                ]
+              }
+            },
+            "daily_ordering_time": {
+              "type": "number",
+              "description": "日々の発注業務にかかる時間（分）"
+            },
+            "ordering_timing": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "during_business",
+                  "after_hours",
+                  "before_opening"
+                ]
+              }
+            },
+            "ordering_responsible": {
+              "type": "string",
+              "enum": [
+                "owner_manager",
+                "chef",
+                "specific_staff",
+                "anyone"
+              ]
+            }
+          }
+        },
+        "inbound": {
+          "type": "object",
+          "description": "④【インバウンド集客】",
+          "properties": {
+            "assumed_issues": {
+              "type": "string",
+              "description": "想定課題と根拠"
+            },
+            "monthly_foreign_guests": {
+              "type": "integer",
+              "description": "外国人客の月間来店数"
+            },
+            "multilingual_support": {
+              "type": "string",
+              "enum": [
+                "fully_supported",
+                "no_menu_translation",
+                "payment_issues",
+                "no_measures"
+              ],
+              "description": "多言語化などの受入体制"
+            }
+          }
+        }
+      }
+    },
+    "priority_issues": {
+      "type": "array",
+      "description": "⑤優先課題の合意（多角的なヒアリングチェックシート）",
+      "items": {
+        "type": "object",
+        "required": ["category", "issue"],
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "marketing",
+              "reservation_efficiency",
+              "cost_reduction",
+              "recruitment",
+              "inbound"
+            ]
+          },
+          "issue": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "優先度（1=低、5=高）"
+          }
+        }
+      }
+    },
+    "dx_solutions": {
+      "type": "object",
+      "description": "⑥課題解決に向けたDXソリューション提案",
+      "properties": {
+        "revenue_maximization": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "efficiency_cost_reduction": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recruitment_market_development": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "next_steps": {
+      "type": "object",
+      "description": "⑧今後の進め方",
+      "properties": {
+        "store_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "store_deadline": {
+          "type": "string",
+          "format": "date"
+        },
+        "tabelog_actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tabelog_deadline": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "description": "商談の要約"
+    },
+    "confidence_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "自動抽出の信頼度（0.0-1.0）"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "レコード作成日時"
+    },
+    "notes": {
+      "type": "string",
+      "description": "手動補足メモ"
+    }
+  }
+}
