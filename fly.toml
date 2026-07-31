@@ -1,0 +1,26 @@
+app = "discussion-api"
+primary_region = "nrt"
+
+[build]
+
+[env]
+  PYTHONUNBUFFERED = "true"
+  WHISPER_MODEL = "base"
+  CORS_ORIGINS = "https://discussion-app.vercel.app"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[mounts]
+  source = "discussion_data"
+  destination = "/app/data"

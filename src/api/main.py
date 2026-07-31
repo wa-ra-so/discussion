@@ -1,10 +1,14 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pathlib import Path
 import tempfile
 from datetime import datetime
 from typing import Optional, List
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from src.core.pipeline import get_pipeline
 from src.storage.sqlite_manager import get_db_manager
@@ -14,17 +18,22 @@ from schema.models import DiscussionRecord
 
 logger = get_logger(__name__)
 
+# レート制限（IPアドレス単位）
+limiter = Limiter(key_func=get_remote_address)
+
 # FastAPI アプリケーション
 app = FastAPI(
     title="Discussion System API",
     description="食べログ営業向け商談解析API",
     version="1.0.0",
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS設定（Next.jsからのリクエスト許可）
+# CORS設定（Next.jsからのリクエスト許可、環境変数 CORS_ORIGINS で上書き可能）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +44,9 @@ app.add_middleware(
 # PROCESS ENDPOINT - 音声ファイル処理
 # ============================================================================
 @app.post("/api/process")
+@limiter.limit("5/minute")
 async def process_audio(
+    request: Request,
     file: UploadFile = File(...),
     company_name: str = Form(...),
     contact_name: Optional[str] = Form(None),
@@ -136,7 +147,9 @@ async def process_audio(
 # LIST MEETINGS ENDPOINT - 商談一覧
 # ============================================================================
 @app.get("/api/list-meetings")
+@limiter.limit("30/minute")
 async def list_meetings(
+    request: Request,
     company_name: Optional[str] = None,
     limit: int = 10,
 ) -> dict:
@@ -181,7 +194,9 @@ async def list_meetings(
 # SEARCH ENDPOINT - 課題検索
 # ============================================================================
 @app.get("/api/search")
+@limiter.limit("30/minute")
 async def search_issues(
+    request: Request,
     query: str,
     limit: int = 20,
 ) -> dict:
@@ -224,7 +239,9 @@ async def search_issues(
 # CARD ENDPOINT - 法人カルテ
 # ============================================================================
 @app.get("/api/card/{company_name}")
+@limiter.limit("30/minute")
 async def get_company_card(
+    request: Request,
     company_name: str,
 ) -> dict:
     """

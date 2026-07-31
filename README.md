@@ -1,6 +1,6 @@
 # Discussion System - 食べログ営業向け商談解析システム
 
-商談音声を自動解析し、ディスカッションシートの項目を構造化データ（JSON）として保存・管理するシステムです。
+商談音声を自動解析し、ディスカッションシートの項目を構造化データ（JSON）として保存・管理するシステムです。CLI と Web UI の両方から利用できます。
 
 ## 概要
 
@@ -13,35 +13,18 @@ Whisper (自動音声認識)
     ↓
 Claude API (テキスト解析 + ディスカッション項目への自動マッピング)
     ↓
-JSON 形式の構造化記録
+JSON 形式の構造化記録 + SQLite への蓄積
     ↓
-法人カルテ生成・蓄積
+法人カルテ生成（CLI: Markdown/JSON、Web UI: ブラウザ表示）
 ```
 
 ## 主な機能
 
-### Phase 1（✅ 完了）
-- ✅ JSON スキーマ定義（6つのディスカッション項目）
-- ✅ Pydantic データモデル
-- ✅ CLI 基本構造
-- ✅ プロジェクト設定・ロギング
-
-### Phase 2（✅ 完了）
-- ✅ 音声認識パイプライン（Whisper）
-- ✅ テキスト解析（Claude API）
-- ✅ 自動ディスカッション項目抽出
-- ✅ 信頼度スコア付与
-
-### Phase 3（✅ 完了）
-- ✅ SQLite データベース設計
-- ✅ 商談蓄積・検索機能
-- ✅ 法人カルテ生成（JSON/Markdown）
-- ✅ 複数商談の統合表示
-
-### Phase 4（🔄 実装中）
-- 🔄 FastAPI バックエンド API
-- 🔄 Next.js + HeroUI フロントエンド
-- 🔄 Web UI（音声処理・一覧・検索・カルテ表示）
+- ✅ JSON スキーマ・Pydantic モデル（ディスカッション6セクション全対応）
+- ✅ 音声認識（Whisper）+ テキスト解析（Claude API）による自動抽出
+- ✅ SQLite への蓄積・企業別検索・法人カルテ生成
+- ✅ CLI（Typer）と Web UI（Next.js + HeroUI）の両対応
+- ✅ FastAPI バックエンド（レート制限・CORS 設定済み）
 
 ## ディスカッション項目
 
@@ -54,92 +37,109 @@ JSON 形式の構造化記録
 5. **優先課題** - 複数の課題を優先度付けして合意
 6. **DXソリューション** - 食べログの提案ソリューション
 
-## インストール
+## ディレクトリ構成
+
+```
+discussion/
+├── pyproject.toml / requirements.txt   # Python 依存関係
+├── .env.example                        # 環境変数テンプレート
+├── Dockerfile / fly.toml               # バックエンドのデプロイ設定
+├── DEPLOYMENT.md                       # デプロイ手順（Fly.io + Vercel）
+│
+├── schema/
+│   ├── discussion_schema.json          # JSON スキーマ定義（マスター）
+│   └── models.py                       # Pydantic モデル
+│
+├── src/
+│   ├── main.py                         # CLI エントリーポイント
+│   ├── config.py                       # 設定管理（環境変数）
+│   ├── api/main.py                     # FastAPI バックエンド
+│   ├── core/                           # Whisper・Claude API・パイプライン
+│   ├── storage/sqlite_manager.py       # SQLite 蓄積・検索
+│   └── commands/                       # CLI コマンド実装
+│
+├── web/                                # Next.js + HeroUI フロントエンド
+│   └── src/
+│       ├── app/page.tsx                # メイン画面（タブ切り替え）
+│       ├── components/                 # Process/List/Search/Card パネル
+│       └── lib/                        # API クライアント・型定義
+│
+└── data/                                # 音声・JSON記録・SQLite（gitignore対象）
+```
+
+## セットアップ
 
 ### 前提条件
 - Python 3.10 以上
+- Node.js 20 以上（Web UI を使う場合）
 - Anthropic API キー
 
-### セットアップ
+### バックエンド
 
 ```bash
-# リポジトリをクローン
-git clone <repository_url>
 cd discussion
-
-# 仮想環境を作成
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 依存パッケージをインストール
 pip install -r requirements.txt
 
-# 環境変数を設定
 cp .env.example .env
 # .env を編集して ANTHROPIC_API_KEY を設定
+```
 
-# プロジェクトを初期化
-python -m src.main init
+### フロントエンド（Web UI を使う場合）
+
+```bash
+cd discussion/web
+npm install
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 ```
 
 ## 使用方法
 
 ### Web UI（推奨）
 
-**FastAPI バックエンド起動:**
+**ターミナル1: バックエンド**
 ```bash
 python -m uvicorn src.api.main:app --reload --port 8000
 ```
-
-API は **http://localhost:8000** で起動
+- API: http://localhost:8000
 - Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
 
-**Next.js フロントエンド起動:**
-詳細は `FRONTEND_SETUP.md` を参照してください。
-
----
-
-### CLI（コマンドライン）
-
-#### 基本コマンド
-
-#### 1. 商談音声を処理
+**ターミナル2: フロントエンド**
 ```bash
-python -m src.main process meeting.wav \
-  --company "レストランA" \
-  --contact "山田太郎" \
-  --notes "初回面談"
+cd web
+npm run dev
 ```
+- UI: http://localhost:3000
 
-#### 2. 商談記録の一覧表示
+画面は4つのタブで構成されています:
+- **音声処理** — 音声ファイルをアップロードして自動解析
+- **一覧** — 登録済み企業・商談履歴の一覧
+- **検索** — 優先課題をキーワード横断検索
+- **法人カルテ** — 企業別の商談履歴を集約表示
+
+本番デプロイの手順は `DEPLOYMENT.md` を参照してください（Fly.io + Vercel、無料枠で構築可能）。
+
+### CLI
+
 ```bash
-python -m src.main list-meetings --limit 20
+# 商談音声を処理
+python -m src.main process meeting.wav --company "レストランA" --contact "山田太郎"
+
+# 商談記録の一覧表示
+python -m src.main list-meetings
 python -m src.main list-meetings --company "レストランA"
-```
 
-#### 3. 商談記録を検索
-```bash
-python -m src.main search "人手不足" --field issue
-python -m src.main search "予約効率" --field category
-```
+# 課題をキーワード検索
+python -m src.main search "人手不足"
 
-#### 4. 法人カルテを生成
-```bash
+# 法人カルテを生成
 python -m src.main card "レストランA" --format markdown
-python -m src.main card "レストランA" --format json
-python -m src.main card "レストランA" --format pdf
-```
+python -m src.main card "レストランA" --format json --output card.json
 
-#### 5. データをエクスポート
-```bash
-python -m src.main export "レストランA" --output result.json
-```
-
-### CLI ヘルプ
-```bash
+# ヘルプ
 python -m src.main --help
-python -m src.main process --help
 ```
 
 ## JSON スキーマ
@@ -159,22 +159,17 @@ python -m src.main process --help
     "recruitment": {
       "assumed_issues": "人手不足で営業時間短縮を余儀なくされている",
       "current_staff": { "employees": 1, "part_time": 2 },
-      "ideal_staff": { "employees": 2, "part_time": 3 },
-      ...
+      "ideal_staff": { "employees": 2, "part_time": 3 }
     },
-    "sales": { ... },
-    "booking_efficiency": { ... },
-    "inbound": { ... }
+    "sales": { "..." : "..." },
+    "booking_efficiency": { "..." : "..." },
+    "inbound": { "..." : "..." }
   },
   "priority_issues": [
-    {
-      "category": "recruitment",
-      "issue": "求人を出しても応募が全く来ない",
-      "priority": 5
-    }
+    { "category": "recruitment", "issue": "求人を出しても応募が全く来ない", "priority": 5 }
   ],
-  "dx_solutions": { ... },
-  "next_steps": { ... },
+  "dx_solutions": { "..." : "..." },
+  "next_steps": { "..." : "..." },
   "confidence_score": 0.85,
   "created_at": "2024-01-31T14:05:00",
   "summary": "..."
@@ -183,90 +178,27 @@ python -m src.main process --help
 
 詳細は `schema/discussion_schema.json` を参照。
 
-## ディレクトリ構成
+## セキュリティ
 
-```
-discussion/
-├── pyproject.toml                  # プロジェクト設定
-├── requirements.txt                # 依存パッケージ
-├── .env.example                    # 環境変数テンプレート
-├── README.md                       # このファイル
-│
-├── schema/
-│   ├── __init__.py
-│   ├── discussion_schema.json      # JSON スキーマ定義（マスター）
-│   └── models.py                   # Pydantic モデル
-│
-├── src/
-│   ├── __init__.py
-│   ├── main.py                     # CLI エントリーポイント
-│   ├── config.py                   # 設定管理
-│   ├── core/                       # 音声・テキスト解析（Phase 2）
-│   ├── storage/                    # DB・JSON管理（Phase 3）
-│   ├── commands/                   # CLI コマンド実装（Phase 2/3）
-│   └── utils/                      # ユーティリティ
-│
-├── data/
-│   ├── audio/                      # 商談音声ファイル
-│   ├── records/                    # 抽出された JSON 記録
-│   └── db.sqlite                   # SQLite データベース
-│
-├── tests/                          # テストファイル
-└── docs/                           # ドキュメント
-```
-
-## 開発ロードマップ
-
-### Phase 1（✅ 完了）
-- JSON スキーマ・Pydantic モデル定義
-- CLI 基本構造
-- プロジェクト設定
-
-### Phase 2（🔄 実装中）
-- Whisper 音声認識
-- Claude API テキスト解析
-- 自動ディスカッション項目抽出
-- `process` コマンド実装
-
-### Phase 3（🔄 実装中）
-- SQLite データベース設計
-- `list-meetings`, `search` コマンド
-- `card`, `export` コマンド
-- 法人カルテ生成機能
+- `ANTHROPIC_API_KEY` はサーバー側のみで使用し、フロントエンドには一切露出しません
+- CORS は許可オリジンのみ（`CORS_ORIGINS` 環境変数で設定）
+- レート制限: `/api/process` は5回/分、その他は30回/分（IPアドレス単位）
+- アップロードファイルは形式・サイズ（100MB上限）を検証
 
 ## トラブルシューティング
 
-### API キーエラー
-```
-Error: ANTHROPIC_API_KEY is not set
-```
-→ `.env` ファイルで `ANTHROPIC_API_KEY` を設定してください。
+**API キーエラー**: `.env` ファイルで `ANTHROPIC_API_KEY` を設定してください。
 
-### 音声ファイルが見つからない
-```
-Error: Audio file not found
-```
-→ ファイルパスが正しいか確認してください。
+**フロントエンドが API に接続できない**: `web/.env.local` の `NEXT_PUBLIC_API_URL` がバックエンドの起動アドレスと一致しているか確認してください。
+
+**音声ファイルが見つからない**: ファイルパスが正しいか、対応形式（MP3/WAV/M4A/FLAC/OGG）か確認してください。
 
 ## テスト
 
 ```bash
-# すべてのテストを実行
 pytest
-
-# カバレッジレポートを表示
 pytest --cov=src
-
-# 特定のテストを実行
-pytest tests/test_models.py -v
 ```
-
-## ドキュメント
-
-- `docs/ARCHITECTURE.md` - システムアーキテクチャ詳細
-- `docs/API_USAGE.md` - Claude API の使用方法
-- `docs/CLI_REFERENCE.md` - CLI コマンドリファレンス
-- `docs/SCHEMA_DEFINITION.md` - スキーマ定義詳細
 
 ## ライセンス
 

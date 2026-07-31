@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # API / CORS
+    cors_origins: str = "http://localhost:3000,http://localhost:3001"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
     class Config:
         env_file = ".env"
         case_sensitive = False

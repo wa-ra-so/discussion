@@ -1,4 +1,3 @@
-import whisper
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -18,6 +17,8 @@ class AudioProcessor:
         Args:
             model_size: Whisper モデルサイズ（tiny, base, small, medium, large）
         """
+        import whisper  # 重い依存のため実際に使うときだけ読み込む
+
         logger.info(f"Loading Whisper model: {model_size}")
         self.model = whisper.load_model(model_size)
         self.model_size = model_size

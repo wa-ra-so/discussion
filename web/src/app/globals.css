@@ -1,0 +1,21 @@
+@import "@heroui/styles";
+
+:root {
+  --app-bg-from: #eff6ff;
+  --app-bg-to: #e0e7ff;
+}
+
+.dark {
+  --app-bg-from: #0b1220;
+  --app-bg-to: #111827;
+}
+
+body {
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP",
+    sans-serif;
+}
