@@ -20,23 +20,28 @@ JSON 形式の構造化記録
 
 ## 主な機能
 
-### Phase 1（現在実装済み）
+### Phase 1（✅ 完了）
 - ✅ JSON スキーマ定義（6つのディスカッション項目）
 - ✅ Pydantic データモデル
 - ✅ CLI 基本構造
 - ✅ プロジェクト設定・ロギング
 
-### Phase 2（実装予定）
-- 🔄 音声認識パイプライン（Whisper）
-- 🔄 テキスト解析（Claude API）
-- 🔄 自動ディスカッション項目抽出
-- 🔄 信頼度スコア付与
+### Phase 2（✅ 完了）
+- ✅ 音声認識パイプライン（Whisper）
+- ✅ テキスト解析（Claude API）
+- ✅ 自動ディスカッション項目抽出
+- ✅ 信頼度スコア付与
 
-### Phase 3（実装予定）
-- 🔄 SQLite データベース設計
-- 🔄 商談蓄積・検索機能
-- 🔄 法人カルテ生成（JSON/Markdown/PDF）
-- 🔄 複数商談の統合表示
+### Phase 3（✅ 完了）
+- ✅ SQLite データベース設計
+- ✅ 商談蓄積・検索機能
+- ✅ 法人カルテ生成（JSON/Markdown）
+- ✅ 複数商談の統合表示
+
+### Phase 4（🔄 実装中）
+- 🔄 FastAPI バックエンド API
+- 🔄 Next.js + HeroUI フロントエンド
+- 🔄 Web UI（音声処理・一覧・検索・カルテ表示）
 
 ## ディスカッション項目
 
@@ -79,7 +84,25 @@ python -m src.main init
 
 ## 使用方法
 
-### 基本コマンド
+### Web UI（推奨）
+
+**FastAPI バックエンド起動:**
+```bash
+python -m uvicorn src.api.main:app --reload --port 8000
+```
+
+API は **http://localhost:8000** で起動
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+**Next.js フロントエンド起動:**
+詳細は `FRONTEND_SETUP.md` を参照してください。
+
+---
+
+### CLI（コマンドライン）
+
+#### 基本コマンド
 
 #### 1. 商談音声を処理
 ```bash
