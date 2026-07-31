@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 from src.core.pipeline import get_pipeline
+from src.storage.sqlite_manager import get_db_manager
 from src.config import settings
 from src.utils.logger import get_logger
 
@@ -114,6 +115,14 @@ def process(
             notes=notes,
             output_dir=output_dir,
         )
+
+        # DB に保存
+        try:
+            db = get_db_manager()
+            record_id = db.save_record(record)
+            logger.info(f"Record saved to database: record_id={record_id}")
+        except Exception as e:
+            logger.warning(f"Failed to save to database: {e}")
 
         # 成功メッセージ
         typer.echo(typer.style("✓ 処理が完了しました！", fg=typer.colors.GREEN))

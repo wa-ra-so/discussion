@@ -3,14 +3,20 @@ from typing import Optional
 from pathlib import Path
 from src.utils.logger import setup_logger
 from src.commands.process import process
+from src.commands.list_meetings import list_meetings
+from src.commands.search import search
+from src.commands.card import card
 
 app = typer.Typer(
     help="食べログ営業向け商談音声解析・法人カルテ自動生成システム"
 )
 logger = setup_logger(__name__)
 
-# process コマンドを統合
+# コマンドを統合
 app.command()(process)
+app.command(name="list-meetings")(list_meetings)
+app.command()(search)
+app.command()(card)
 
 
 @app.command()
