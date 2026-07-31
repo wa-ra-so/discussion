@@ -2,38 +2,15 @@ import typer
 from typing import Optional
 from pathlib import Path
 from src.utils.logger import setup_logger
+from src.commands.process import process
 
 app = typer.Typer(
     help="食べログ営業向け商談音声解析・法人カルテ自動生成システム"
 )
 logger = setup_logger(__name__)
 
-
-@app.command()
-def process(
-    audio_file: Path = typer.Argument(
-        ..., help="商談音声ファイルのパス (MP3/WAV)"
-    ),
-    company_name: str = typer.Option(
-        ..., "--company", "-c", help="店舗名（企業名）"
-    ),
-    contact_name: Optional[str] = typer.Option(
-        None, "--contact", "-n", help="接触者氏名"
-    ),
-    notes: Optional[str] = typer.Option(
-        None, "--notes", help="手動補足メモ"
-    ),
-) -> None:
-    """
-    商談音声ファイルを処理し、ディスカッション内容を自動抽出
-
-    Example:
-        discussion process meeting.wav --company "レストランA" --contact "山田太郎"
-    """
-    logger.info(f"Processing audio file: {audio_file}")
-    logger.info(f"Company: {company_name}, Contact: {contact_name}")
-    typer.echo("✓ 音声ファイルの処理を開始します...")
-    # Phase 2 で実装
+# process コマンドを統合
+app.command()(process)
 
 
 @app.command()
