@@ -1,29 +1,32 @@
-app = "discussion-api"
-primary_region = "nrt"
+# fly.toml app configuration file generated for discussion-xcctgw on 2026-08-02T05:40:27Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'discussion-xcctgw'
+primary_region = 'nrt'
 
 [build]
 
 [env]
-  PYTHONUNBUFFERED = "true"
-  WHISPER_MODEL = "base"
-  # CORS の Origin にはパスを含めない（スキーム+ホストのみ）。
-  # GitHub Pages のプロジェクトページは https://<owner>.github.io がオリジンになる
-  # （配信パスが /discussion/ でも Origin ヘッダー自体はリポジトリ名を含まない）。
-  CORS_ORIGINS = "https://wa-ra-so.github.io"
+  CORS_ORIGINS = 'https://wa-ra-so.github.io'
+  PYTHONUNBUFFERED = 'true'
+  WHISPER_MODEL = 'base'
+
+[[mounts]]
+  source = 'discussion_data'
+  destination = '/app/data'
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  memory = "2gb"
-  cpu_kind = "shared"
+  memory = '2gb'
+  cpu_kind = 'shared'
   cpus = 1
-
-[mounts]
-  source = "discussion_data"
-  destination = "/app/data"
+  memory_mb = 2048
