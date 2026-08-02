@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { Tabs } from "@heroui/react";
-import { UploadCloud, ListChecks, Search, IdCard } from "lucide-react";
+import { UploadCloud, ListChecks, Search, IdCard, MessageSquareText } from "lucide-react";
 import { ProcessPanel } from "@/components/ProcessPanel";
 import { ListPanel } from "@/components/ListPanel";
 import { SearchPanel } from "@/components/SearchPanel";
 import { CardPanel } from "@/components/CardPanel";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Home() {
   const [pendingCompany, setPendingCompany] = useState<string | null>(null);
@@ -18,12 +19,20 @@ export default function Home() {
   };
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-10 sm:px-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">商談解析システム</h1>
-        <p className="text-neutral-600 dark:text-neutral-400">
-          食べログ営業向け ― 商談音声を自動解析し、法人カルテとして蓄積します
-        </p>
+    <div className="mx-auto flex max-w-5xl flex-col gap-8 px-4 py-8 sm:px-8 sm:py-10">
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-[var(--accent-foreground)] shadow-[var(--surface-shadow)]">
+            <MessageSquareText className="h-5 w-5" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">商談解析システム</h1>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 sm:text-base">
+              食べログ営業向け ― 商談音声を自動解析し、法人カルテとして蓄積します
+            </p>
+          </div>
+        </div>
+        <ThemeToggle />
       </header>
 
       <Tabs.Root selectedKey={selectedTab} onSelectionChange={(key) => setSelectedTab(String(key))}>
@@ -44,16 +53,16 @@ export default function Home() {
           </Tabs.List>
         </Tabs.ListContainer>
 
-        <Tabs.Panel id="process" className="pt-6">
+        <Tabs.Panel id="process" className="animate-in fade-in slide-in-from-bottom-1 pt-6 duration-200">
           <ProcessPanel />
         </Tabs.Panel>
-        <Tabs.Panel id="list" className="pt-6">
+        <Tabs.Panel id="list" className="animate-in fade-in slide-in-from-bottom-1 pt-6 duration-200">
           <ListPanel onSelectCompany={goToCard} />
         </Tabs.Panel>
-        <Tabs.Panel id="search" className="pt-6">
+        <Tabs.Panel id="search" className="animate-in fade-in slide-in-from-bottom-1 pt-6 duration-200">
           <SearchPanel />
         </Tabs.Panel>
-        <Tabs.Panel id="card" className="pt-6">
+        <Tabs.Panel id="card" className="animate-in fade-in slide-in-from-bottom-1 pt-6 duration-200">
           <CardPanel
             initialCompany={pendingCompany}
             onCompanyLoaded={() => setPendingCompany(null)}

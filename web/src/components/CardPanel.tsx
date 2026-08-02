@@ -12,6 +12,7 @@ import { Chip } from "@heroui/react";
 import { Search, Building2 } from "lucide-react";
 import { ApiRequestError, getCompanyCard } from "@/lib/api";
 import { categoryColor, categoryLabel, formatDate } from "@/lib/constants";
+import { PriorityIndicator } from "@/components/PriorityIndicator";
 import type { CardResponse } from "@/lib/types";
 
 type RecruitmentSection = {
@@ -159,9 +160,7 @@ export function CardPanel({
                       <Chip.Label>{categoryLabel(issue.category)}</Chip.Label>
                     </Chip>
                     <span>{issue.issue}</span>
-                    {issue.priority && (
-                      <span className="text-red-500">{"🔴".repeat(issue.priority)}</span>
-                    )}
+                    <PriorityIndicator value={issue.priority} />
                   </li>
                 ))}
                 {latest.priority_issues.length === 0 && (

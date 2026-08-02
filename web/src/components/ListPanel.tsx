@@ -9,9 +9,10 @@ import { Input } from "@heroui/react";
 import { Spinner } from "@heroui/react";
 import { Alert } from "@heroui/react";
 import { Chip } from "@heroui/react";
-import { Building2, Users } from "lucide-react";
+import { Building2, CalendarX, Users } from "lucide-react";
 import { ApiRequestError, listMeetings } from "@/lib/api";
 import { formatDate, formatPercent } from "@/lib/constants";
+import { EmptyState } from "@/components/EmptyState";
 import type { CompanySummary, MeetingSummary } from "@/lib/types";
 
 export function ListPanel({ onSelectCompany }: { onSelectCompany: (name: string) => void }) {
@@ -102,18 +103,16 @@ export function ListPanel({ onSelectCompany }: { onSelectCompany: (name: string)
           {!isLoading && !activeCompany && (
             <div className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
               {filteredCompanies.length === 0 && (
-                <p className="py-6 text-center text-sm text-neutral-500">
-                  該当する企業がありません
-                </p>
+                <EmptyState icon={Building2} message="該当する企業がありません" />
               )}
               {filteredCompanies.map((company) => (
                 <button
                   key={company.company_id}
                   onClick={() => loadCompanyMeetings(company.name)}
-                  className="flex items-center justify-between gap-4 py-3 text-left transition hover:bg-neutral-50 dark:hover:bg-neutral-900/40"
+                  className="flex cursor-pointer items-center justify-between gap-4 rounded-lg py-3 text-left transition-colors duration-150 hover:bg-[var(--surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
                 >
                   <div className="flex items-center gap-3">
-                    <Building2 className="h-5 w-5 text-blue-600" />
+                    <Building2 className="h-5 w-5 text-[var(--accent)]" />
                     <div>
                       <p className="font-medium">{company.name}</p>
                       <p className="text-xs text-neutral-500">
@@ -136,9 +135,7 @@ export function ListPanel({ onSelectCompany }: { onSelectCompany: (name: string)
           {!isLoading && activeCompany && (
             <div className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
               {(meetings?.length ?? 0) === 0 && (
-                <p className="py-6 text-center text-sm text-neutral-500">
-                  商談記録がありません
-                </p>
+                <EmptyState icon={CalendarX} message="商談記録がありません" />
               )}
               {meetings?.map((meeting) => (
                 <div key={meeting.meeting_uuid} className="flex flex-col gap-1 py-3">

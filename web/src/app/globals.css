@@ -6,16 +6,34 @@
 }
 
 .dark {
-  --app-bg-from: #0b1220;
-  --app-bg-to: #111827;
+  --app-bg-from: color-mix(in oklab, var(--background) 92%, #1d4ed8 8%);
+  --app-bg-to: var(--background);
 }
 
 body {
   font-family:
+    var(--font-jakarta),
+    var(--font-noto-jp),
     ui-sans-serif,
     system-ui,
     -apple-system,
     "Hiragino Kaku Gothic ProN",
-    "Noto Sans JP",
     sans-serif;
+  font-feature-settings: "palt";
+}
+
+/* 数値は等幅で揃えて表を読みやすくする */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

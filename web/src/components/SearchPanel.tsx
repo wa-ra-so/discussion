@@ -12,6 +12,8 @@ import { Chip } from "@heroui/react";
 import { Search } from "lucide-react";
 import { ApiRequestError, searchIssues } from "@/lib/api";
 import { categoryColor, categoryLabel, formatDate } from "@/lib/constants";
+import { PriorityIndicator } from "@/components/PriorityIndicator";
+import { EmptyState } from "@/components/EmptyState";
 import type { SearchIssueResult } from "@/lib/types";
 
 export function SearchPanel() {
@@ -99,9 +101,7 @@ export function SearchPanel() {
 
               <div className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
                 {results.length === 0 && (
-                  <p className="py-6 text-center text-sm text-neutral-500">
-                    該当する課題は見つかりませんでした
-                  </p>
+                  <EmptyState icon={Search} message="該当する課題は見つかりませんでした" />
                 )}
                 {results.map((issue, i) => (
                   <div key={i} className="flex flex-col gap-1 py-3">
@@ -112,9 +112,7 @@ export function SearchPanel() {
                           <Chip.Label>{categoryLabel(issue.category)}</Chip.Label>
                         </Chip>
                       </div>
-                      {issue.priority && (
-                        <span className="text-red-500">{"🔴".repeat(issue.priority)}</span>
-                      )}
+                      <PriorityIndicator value={issue.priority} />
                     </div>
                     <p className="text-sm">{issue.issue}</p>
                     <p className="text-xs text-neutral-500">{formatDate(issue.meeting_date)}</p>

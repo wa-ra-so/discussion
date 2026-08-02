@@ -14,6 +14,7 @@ import { Spinner } from "@heroui/react";
 import { UploadCloud, FileAudio, CheckCircle2, XCircle } from "lucide-react";
 import { ApiRequestError, processAudio } from "@/lib/api";
 import { categoryLabel } from "@/lib/constants";
+import { PriorityIndicator } from "@/components/PriorityIndicator";
 import type { ProcessResult } from "@/lib/types";
 
 const SUPPORTED_EXTENSIONS = [".mp3", ".wav", ".m4a", ".flac", ".ogg"];
@@ -249,9 +250,7 @@ export function ProcessPanel() {
                         <Chip.Label>{categoryLabel(issue.category)}</Chip.Label>
                       </Chip>
                       <span>{issue.issue}</span>
-                      {issue.priority && (
-                        <span className="text-red-500">{"🔴".repeat(issue.priority)}</span>
-                      )}
+                      <PriorityIndicator value={issue.priority} />
                     </li>
                   ))}
                 </ul>
