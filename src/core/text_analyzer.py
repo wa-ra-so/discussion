@@ -56,7 +56,15 @@ class TextAnalyzer:
             )
 
             # JSON を抽出
-            response_text = message.content[0].text
+            # content[0] が常にテキストとは限らない（拡張思考が有効なモデルでは
+            # ThinkingBlock が先に入ることがあり、.text 属性を持たない）。
+            # type == "text" のブロックを探す。
+            response_text = next(
+                (block.text for block in message.content if getattr(block, "type", None) == "text"),
+                None,
+            )
+            if response_text is None:
+                raise ValueError("Claude のレスポンスにテキストブロックが含まれていません")
             structured_data = self._extract_json(response_text)
 
             # DiscussionRecord を構築
