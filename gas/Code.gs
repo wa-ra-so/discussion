@@ -1,11 +1,16 @@
 /**
  * 商談解析システム（Google Apps Script 版）
  *
- * 文字起こし済みの商談テキストを Gemini API で構造化し、
- * このスクリプトが紐づくスプレッドシートに法人/店舗別に蓄積する。
- * Web アプリとしてデプロイすることで、チーム全員が専用URLからアクセスできる
- * （個々人が Gemini アカウントを持つ必要はなく、スクリプトプロパティに
- * 保存した1つの API キーを共有する）。
+ * 文字起こし済みの商談テキストを、外部AI APIを一切使わずキーワード・
+ * ルールベースで構造化し、このスクリプトが紐づくスプレッドシートに
+ * 法人/店舗別に蓄積する。Web アプリとしてデプロイすることで、チーム全員が
+ * 専用URLからアクセスできる。APIキーの取得・課金・CORSといった外部依存が
+ * 一切ないため、動作が止まる要因を最小化している。
+ *
+ * ルールベースゆえの制約: 「人手が足りなくて困っている」のような
+ * キーワードを含む明示的な言い回しは拾えるが、遠回しな表現や文脈依存の
+ * 課題までは拾えない。DXソリューション提案も、検出したカテゴリに応じた
+ * 定型文からの選択になる（AIによる商談内容に即した提案ではない）。
  */
 
 const SHEET_MEETINGS = 'Meetings';
@@ -22,8 +27,6 @@ const ISSUES_HEADERS = [
   'priority', 'meeting_date',
 ];
 
-const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
-
 // ============================================================================
 // Web アプリのエントリーポイント
 // ============================================================================
@@ -35,7 +38,7 @@ function doGet(e) {
 }
 
 // ============================================================================
-// テキスト解析（Gemini API 呼び出し）
+// テキスト解析（ルールベース抽出）
 // ============================================================================
 /**
  * @param {{transcript:string, companyName:string, corporateName?:string,
@@ -53,7 +56,7 @@ function analyzeTranscript(params) {
     throw new Error('店舗名は必須です');
   }
 
-  const structured = callGemini_(transcript, params);
+  const structured = extractRuleBased_(transcript);
   const record = buildRecord_(structured, params);
 
   saveRecord_(record);
@@ -61,138 +64,109 @@ function analyzeTranscript(params) {
   return record;
 }
 
+// ============================================================================
+// ルールベース抽出エンジン（外部AI APIなし）
+// ============================================================================
+
+// カテゴリ判定用キーワード（①採用・人手 ②集客・売上 ③予約・業務効率 ④インバウンド集客）
+const CATEGORY_KEYWORDS_ = {
+  recruitment: ['採用', '人手', 'スタッフ', '求人', 'アルバイト', 'パート', '社員', '人材', '離職', '欠員', '募集'],
+  sales: ['売上', '客単価', '集客', '客数', '稼働率', '客層', '来店', '売り上げ', '回転率', '席稼働'],
+  booking_efficiency: ['予約', '発注', 'オペレーション', '電話対応', 'ダブルブッキング', 'システム', '業務効率', '注文', 'レジ'],
+  inbound: ['インバウンド', '外国人', '多言語', '英語対応', '海外', '訪日'],
+};
+
+// 課題を示唆する表現（このいずれかを含む文だけを priority_issues の候補にする）
+// 「問題なく」「悪くない」のような否定表現を誤検出しないよう、
+// 単純な部分一致で安全な語のみを採用している（例: 「悪く」は「悪くない」に
+// マッチしてしまうため避け、「悪い」のみ採用）
+const ISSUE_KEYWORDS_ = [
+  '課題', '困っ', '難し', '不足', '足りない', '対応できて', 'できていない',
+  '悩んでいる', '悩み', '厳しい', '減って', '下がって', '来ない', '応募がない',
+  '苦労', '手が回らない', '間に合わない', '負担', '大変', '悪い', 'ミス',
+];
+
+// 優先度を引き上げる強調表現
+const PRIORITY_INTENSIFIERS_ = ['かなり', 'とても', '非常に', '深刻', '毎日', '常に', 'すごく', '大きな', '相当'];
+
+// カテゴリごとの定型DXソリューション（AIによる個別提案の代わり）
+const DX_SOLUTIONS_BY_CATEGORY_ = {
+  recruitment: { bucket: 'recruitment_market_development', text: '食べログ求人による人材募集の強化' },
+  sales: { bucket: 'revenue_maximization', text: '食べログ有料プランでの露出強化・ネット予約導線の最適化' },
+  booking_efficiency: { bucket: 'efficiency_cost_reduction', text: 'ネット予約・発注システム連携による業務時間の削減' },
+  inbound: { bucket: 'revenue_maximization', text: '食べログの多言語掲載・インバウンド集客支援の活用' },
+};
+
+const CATEGORY_ORDER_ = ['recruitment', 'sales', 'booking_efficiency', 'inbound'];
+
 /**
- * Gemini API を呼び出し、構造化 JSON を取得する
+ * 文字起こしテキストをキーワードベースで解析し、Gemini/Claude版と
+ * 同じ形（discussions/priority_issues/dx_solutions/summary/confidence_score）
+ * の構造化データを返す。
  */
-function callGemini_(transcript, params) {
-  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
-  if (!apiKey) {
-    throw new Error(
-      'GEMINI_API_KEY が設定されていません。' +
-      'スクリプトエディタの「プロジェクトの設定」→「スクリプト プロパティ」で設定してください。'
-    );
-  }
-  const model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || DEFAULT_GEMINI_MODEL;
+function extractRuleBased_(transcript) {
+  const sentences = splitSentences_(transcript);
 
-  const systemPrompt = buildSystemPrompt_();
-  const userPrompt = buildUserPrompt_(transcript, params);
+  const discussions = {};
+  const priorityIssues = [];
+  const matchedCategories = {};
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-    model + ':generateContent?key=' + encodeURIComponent(apiKey);
+  CATEGORY_ORDER_.forEach(function (category) {
+    const keywords = CATEGORY_KEYWORDS_[category];
+    const categorySentences = sentences.filter(function (s) { return containsAny_(s, keywords); });
+    const issueSentences = categorySentences.filter(function (s) { return containsAny_(s, ISSUE_KEYWORDS_); });
 
-  const payload = {
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.2,
-    },
-  };
+    if (categorySentences.length > 0) {
+      matchedCategories[category] = true;
+      discussions[category] = {
+        assumed_issues: issueSentences.length > 0 ? issueSentences.join(' ') : null,
+      };
+    }
 
-  const response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true,
+    issueSentences.forEach(function (sentence) {
+      let priority = 3;
+      if (containsAny_(sentence, PRIORITY_INTENSIFIERS_)) priority += 1;
+      if (issueSentences.length > 1) priority += 1;
+      priority = Math.max(1, Math.min(5, priority));
+
+      priorityIssues.push({ category: category, issue: sentence, priority: priority });
+    });
   });
 
-  const status = response.getResponseCode();
-  const body = response.getContentText();
+  const dxSolutions = { revenue_maximization: [], efficiency_cost_reduction: [], recruitment_market_development: [] };
+  Object.keys(matchedCategories).forEach(function (category) {
+    const solution = DX_SOLUTIONS_BY_CATEGORY_[category];
+    if (solution && dxSolutions[solution.bucket].indexOf(solution.text) === -1) {
+      dxSolutions[solution.bucket].push(solution.text);
+    }
+  });
 
-  if (status < 200 || status >= 300) {
-    throw new Error('Gemini API エラー (HTTP ' + status + '): ' + body.slice(0, 500));
-  }
+  const summary = priorityIssues.length > 0
+    ? '検出された課題: ' + priorityIssues.map(function (i) { return i.issue; }).join(' / ')
+    : 'キーワードベースの解析では明確な課題は検出されませんでした。文字起こし内容を直接ご確認ください。';
 
-  const data = JSON.parse(body);
-  const candidate = data.candidates && data.candidates[0];
-  const text = candidate && candidate.content && candidate.content.parts
-    && candidate.content.parts[0] && candidate.content.parts[0].text;
+  // 検出網羅率（4カテゴリ中いくつでキーワードがヒットしたか）を参考値として返す。
+  // AIによる意味的な確信度ではない点に注意。
+  const confidenceScore = Object.keys(matchedCategories).length / CATEGORY_ORDER_.length;
 
-  if (!text) {
-    throw new Error('Gemini からの応答が空です: ' + body.slice(0, 500));
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    throw new Error('Gemini の応答を JSON として解析できませんでした: ' + text.slice(0, 500));
-  }
+  return {
+    discussions: discussions,
+    priority_issues: priorityIssues,
+    dx_solutions: dxSolutions,
+    summary: summary,
+    confidence_score: confidenceScore,
+  };
 }
 
-function buildSystemPrompt_() {
-  return [
-    'あなたは食べログの営業ヒアリング記録を分析するAIです。',
-    '',
-    '商談音声の書き起こしテキストが与えられます。',
-    '以下の6つのディスカッション項目から情報を抽出し、JSONフォーマットで返してください：',
-    '',
-    '1. 採用・人手（recruitment）：スタッフ構成、採用課題、求人施策',
-    '2. 集客・売上（sales）：客単価、席稼働率、客層、売上施策',
-    '3. 予約・業務効率（booking_efficiency）：予約システム、発注業務、オペレーション課題',
-    '4. インバウンド集客（inbound）：外国人客対応、多言語対応状況',
-    '5. 優先課題（priority_issues）：複数の課題を優先度付け',
-    '6. DXソリューション提案（dx_solutions）：食べログの提案ソリューション',
-    '',
-    '【重要】',
-    '- 確実に抽出できた情報のみを記入してください',
-    '- 推測や補完は避けてください',
-    '- 不確実な情報や曖昧な箇所は記入しないでください',
-    '- JSON フォーマットで返してください（マークダウンのコードブロックは不要、JSON本文のみ）',
-    '',
-    '【JSON スキーマ】',
-    JSON.stringify({
-      discussions: {
-        recruitment: {
-          assumed_issues: 'string or null',
-          current_staff: { employees: 'number or null', part_time: 'number or null' },
-          ideal_staff: { employees: 'number or null', part_time: 'number or null' },
-          hiring_needs: 'string or null',
-          current_initiatives: 'string or null',
-        },
-        sales: {
-          average_customer_spend: { lunch: 'number or null', dinner: 'number or null' },
-          seat_utilization: { weekday: 'number or null', weekend: 'number or null' },
-          customer_segment: 'string or null',
-          current_initiatives: 'string or null',
-        },
-        booking_efficiency: {
-          current_reservation_method: ['string'],
-          phone_response: { frequency: 'string or null', daily_calls: 'number or null' },
-          daily_ordering_time: 'number or null',
-          ordering_responsible: 'string or null',
-        },
-        inbound: {
-          monthly_foreign_guests: 'number or null',
-          multilingual_support: 'string or null',
-        },
-      },
-      priority_issues: [{ category: 'string', issue: 'string', priority: 'number (1-5)' }],
-      dx_solutions: {
-        revenue_maximization: ['string'],
-        efficiency_cost_reduction: ['string'],
-        recruitment_market_development: ['string'],
-      },
-      summary: 'string',
-      confidence_score: 'number (0.0-1.0)',
-    }, null, 2),
-  ].join('\n');
+function splitSentences_(text) {
+  return text
+    .split(/[。\n]/)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.length > 0; });
 }
 
-function buildUserPrompt_(transcript, params) {
-  return [
-    '【商談情報】',
-    '店舗名：' + params.companyName,
-    '法人名：' + (params.corporateName || '不明（単一店舗経営の可能性）'),
-    '接触者：' + (params.contactName || '不明'),
-    '日時：' + (params.meetingDate || '不明'),
-    '',
-    '【文字起こしテキスト】',
-    transcript,
-    '',
-    '【指示】',
-    '上記の商談内容から、6つのディスカッション項目への情報抽出を行い、',
-    'JSON フォーマットで返してください。',
-  ].join('\n');
+function containsAny_(text, keywords) {
+  return keywords.some(function (kw) { return text.indexOf(kw) !== -1; });
 }
 
 function buildRecord_(structured, params) {

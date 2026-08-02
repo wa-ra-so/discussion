@@ -145,7 +145,7 @@
     <section class="panel active" id="panel-process">
       <div class="card">
         <h2>商談テキストを解析</h2>
-        <p class="desc">文字起こし済みの商談テキストを貼り付けると、Gemini が自動でディスカッション項目を抽出します</p>
+        <p class="desc">文字起こし済みの商談テキストを貼り付けると、キーワードベースの解析エンジンが自動でディスカッション項目を抽出します（外部AI APIは使用しません）</p>
 
         <div class="field">
           <label>文字起こしテキスト</label>
@@ -307,7 +307,7 @@
         '<div><div class="muted">店舗名</div><div style="font-weight:600">' + escapeHtml(record.company_name) + '</div></div>' +
         (record.corporate_name ? '<div><div class="muted">法人名</div><div style="font-weight:600">' + escapeHtml(record.corporate_name) + '</div></div>' : '') +
         '<div><div class="muted">接触者</div><div style="font-weight:600">' + escapeHtml(record.contact_name || '不明') + '</div></div>' +
-        '<div><div class="muted">信頼度</div><div style="font-weight:600">' + Math.round((record.confidence_score || 0) * 100) + '%</div></div>' +
+        '<div><div class="muted">検出網羅率</div><div style="font-weight:600">' + Math.round((record.confidence_score || 0) * 100) + '%</div></div>' +
         '</div>' +
         (record.summary ? '<div class="section-title">要約</div><p style="font-size:13px;">' + escapeHtml(record.summary) + '</p>' : '') +
         (issuesHtml ? '<div class="section-title">優先課題</div>' + issuesHtml : '');
