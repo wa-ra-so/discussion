@@ -100,6 +100,22 @@ class SQLiteManager:
                 """
             )
 
+            # processing_jobs テーブル（音声処理を非同期化するためのジョブ管理）
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS processing_jobs (
+                    job_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    company_name TEXT,
+                    corporate_name TEXT,
+                    result_json TEXT,
+                    error_message TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
             conn.commit()
             logger.info(f"Database initialized: {self.db_path}")
 
@@ -542,6 +558,66 @@ class SQLiteManager:
                 )
 
             return {"corporate_name": corporate_name, "stores": stores}
+
+    # ------------------------------------------------------------------
+    # 音声処理ジョブ管理（非同期処理用）
+    # ------------------------------------------------------------------
+    def create_job(
+        self, job_id: str, company_name: str, corporate_name: Optional[str] = None
+    ) -> None:
+        """処理ジョブを 'pending' 状態で作成"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO processing_jobs (job_id, status, company_name, corporate_name)
+                VALUES (?, 'pending', ?, ?)
+                """,
+                (job_id, company_name, corporate_name),
+            )
+            conn.commit()
+
+    def update_job(
+        self,
+        job_id: str,
+        status: str,
+        result: Optional[dict] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """処理ジョブのステータスを更新"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE processing_jobs
+                SET status = ?, result_json = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE job_id = ?
+                """,
+                (
+                    status,
+                    json.dumps(result, ensure_ascii=False) if result is not None else None,
+                    error_message,
+                    job_id,
+                ),
+            )
+            conn.commit()
+
+    def get_job(self, job_id: str) -> Optional[dict]:
+        """処理ジョブの状態を取得"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM processing_jobs WHERE job_id = ?", (job_id,)
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+
+            data = dict(row)
+            if data.get("result_json"):
+                data["result"] = json.loads(data["result_json"])
+            else:
+                data["result"] = None
+            del data["result_json"]
+            return data
 
 
 def get_db_manager() -> SQLiteManager:

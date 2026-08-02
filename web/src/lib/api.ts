@@ -2,7 +2,8 @@ import type {
   CardResponse,
   CorporateCardResponse,
   ListMeetingsResponse,
-  ProcessResult,
+  ProcessJobStartResponse,
+  ProcessJobStatusResponse,
   SearchResponse,
 } from "./types";
 
@@ -39,7 +40,7 @@ export async function processAudio(params: {
   contactName?: string;
   meetingDate?: string;
   notes?: string;
-}): Promise<ProcessResult> {
+}): Promise<ProcessJobStartResponse> {
   const formData = new FormData();
   formData.append("file", params.file);
   formData.append("company_name", params.companyName);
@@ -53,7 +54,17 @@ export async function processAudio(params: {
     body: formData,
   });
 
-  return handleResponse<ProcessResult>(response);
+  return handleResponse<ProcessJobStartResponse>(response);
+}
+
+export async function getProcessStatus(
+  jobId: string,
+): Promise<ProcessJobStatusResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/process/status/${encodeURIComponent(jobId)}`,
+  );
+
+  return handleResponse<ProcessJobStatusResponse>(response);
 }
 
 export async function listMeetings(params?: {

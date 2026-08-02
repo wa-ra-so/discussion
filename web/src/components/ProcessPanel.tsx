@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@heroui/react";
 import { Button } from "@heroui/react";
 import { TextField } from "@heroui/react";
@@ -12,13 +12,14 @@ import { Chip } from "@heroui/react";
 import { ProgressBar } from "@heroui/react";
 import { Spinner } from "@heroui/react";
 import { UploadCloud, FileAudio, CheckCircle2, XCircle } from "lucide-react";
-import { ApiRequestError, processAudio } from "@/lib/api";
+import { ApiRequestError, getProcessStatus, processAudio } from "@/lib/api";
 import { categoryLabel } from "@/lib/constants";
 import { PriorityIndicator } from "@/components/PriorityIndicator";
 import type { ProcessResult } from "@/lib/types";
 
 const SUPPORTED_EXTENSIONS = [".mp3", ".wav", ".m4a", ".flac", ".ogg"];
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const POLL_INTERVAL_MS = 3000;
 
 export function ProcessPanel() {
   const [file, setFile] = useState<File | null>(null);
@@ -32,6 +33,13 @@ export function ProcessPanel() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+    };
+  }, []);
 
   const validateAndSetFile = (candidate: File | undefined) => {
     if (!candidate) return;
@@ -54,6 +62,44 @@ export function ProcessPanel() {
     validateAndSetFile(e.dataTransfer.files?.[0]);
   };
 
+  const handleApiError = (err: unknown) => {
+    if (err instanceof ApiRequestError) {
+      setError(`サーバーエラー (HTTP ${err.status}): ${err.message}`);
+    } else if (err instanceof TypeError) {
+      // fetch() 自体が失敗（サーバー未応答・CORSブロック・タイムアウトなど）
+      setError(
+        `サーバーに接続できませんでした（${err.message}）。バックエンドが起動しているか、` +
+          "CORS設定を確認してください。",
+      );
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`処理中に予期しないエラーが発生しました: ${message}`);
+    }
+  };
+
+  const pollJobStatus = (jobId: string) => {
+    pollTimeoutRef.current = setTimeout(async () => {
+      try {
+        const status = await getProcessStatus(jobId);
+        if (status.status === "pending") {
+          pollJobStatus(jobId);
+          return;
+        }
+        setIsLoading(false);
+        if (status.status === "completed" && status.result) {
+          setResult(status.result);
+          setFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        } else {
+          setError(status.error ?? "音声処理に失敗しました");
+        }
+      } catch (err) {
+        setIsLoading(false);
+        handleApiError(err);
+      }
+    }, POLL_INTERVAL_MS);
+  };
+
   const handleSubmit = async () => {
     if (!file || !companyName.trim()) {
       setError("音声ファイルと店舗名は必須です");
@@ -65,7 +111,7 @@ export function ProcessPanel() {
     setResult(null);
 
     try {
-      const data = await processAudio({
+      const { job_id } = await processAudio({
         file,
         companyName: companyName.trim(),
         corporateName: corporateName.trim() || undefined,
@@ -73,24 +119,10 @@ export function ProcessPanel() {
         meetingDate: meetingDate || undefined,
         notes: notes.trim() || undefined,
       });
-      setResult(data);
-      setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      pollJobStatus(job_id);
     } catch (err) {
-      if (err instanceof ApiRequestError) {
-        setError(`サーバーエラー (HTTP ${err.status}): ${err.message}`);
-      } else if (err instanceof TypeError) {
-        // fetch() 自体が失敗（サーバー未応答・CORSブロック・タイムアウトなど）
-        setError(
-          `サーバーに接続できませんでした（${err.message}）。バックエンドが起動しているか、` +
-            "CORS設定、処理時間のタイムアウトを確認してください。",
-        );
-      } else {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(`処理中に予期しないエラーが発生しました: ${message}`);
-      }
-    } finally {
       setIsLoading(false);
+      handleApiError(err);
     }
   };
 
