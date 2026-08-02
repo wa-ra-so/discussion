@@ -49,6 +49,7 @@ async def process_audio(
     request: Request,
     file: UploadFile = File(...),
     company_name: str = Form(...),
+    corporate_name: Optional[str] = Form(None),
     contact_name: Optional[str] = Form(None),
     meeting_date: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
@@ -59,6 +60,7 @@ async def process_audio(
     Args:
         file: 音声ファイル (MP3/WAV)
         company_name: 店舗名
+        corporate_name: 法人名（任意。単一店舗経営の場合は不要）
         contact_name: 接触者氏名
         meeting_date: 商談日時
         notes: 補足メモ
@@ -99,6 +101,7 @@ async def process_audio(
             record, filepath = pipeline.process_and_save(
                 audio_file=tmp_path,
                 company_name=company_name,
+                corporate_name=corporate_name,
                 contact_name=contact_name,
                 meeting_date=meeting_date,
                 notes=notes,
@@ -117,6 +120,7 @@ async def process_audio(
                 "success": True,
                 "meeting_id": record.meeting_id,
                 "company_name": record.company_info.name,
+                "corporate_name": record.company_info.corporate_name,
                 "contact_name": record.company_info.contact_name,
                 "confidence_score": record.confidence_score,
                 "summary": record.summary,
@@ -151,24 +155,28 @@ async def process_audio(
 async def list_meetings(
     request: Request,
     company_name: Optional[str] = None,
+    corporate_name: Optional[str] = None,
     limit: int = 10,
 ) -> dict:
     """
     商談記録を一覧取得
 
     Args:
-        company_name: フィルター対象企業（Noneの場合は全企業）
+        company_name: フィルター対象店舗（指定時はその店舗の商談一覧）
+        corporate_name: フィルター対象法人（指定時はその法人傘下の店舗一覧）
         limit: 取得件数
 
     Returns:
-        企業・商談情報のリスト
+        法人一覧 / 店舗一覧 / 商談情報のリスト
     """
     try:
-        logger.info(f"Listing meetings: company={company_name}, limit={limit}")
+        logger.info(
+            f"Listing meetings: company={company_name}, corporate={corporate_name}, limit={limit}"
+        )
         db = get_db_manager()
 
         if company_name:
-            # 特定企業の商談一覧
+            # 特定店舗の商談一覧
             meetings = db.get_meetings_by_company(company_name, limit=limit)
             return {
                 "success": True,
@@ -176,15 +184,33 @@ async def list_meetings(
                 "meetings": meetings,
                 "count": len(meetings),
             }
+        elif corporate_name:
+            # 法人傘下の店舗一覧
+            card = db.get_corporate_card(corporate_name)
+            if card is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No corporation found: {corporate_name}",
+                )
+            return {
+                "success": True,
+                "corporate_name": corporate_name,
+                "stores": card["stores"],
+                "count": len(card["stores"]),
+            }
         else:
-            # 全企業一覧
+            # 全法人一覧 + 全店舗一覧
+            corporations = db.get_all_corporations(limit=limit)
             companies = db.get_all_companies(limit=limit)
             return {
                 "success": True,
+                "corporations": corporations,
                 "companies": companies,
                 "count": len(companies),
             }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error listing meetings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -271,6 +297,7 @@ async def get_company_card(
         return {
             "success": True,
             "company_name": company_name,
+            "corporate_name": latest.get("company_info", {}).get("corporate_name"),
             "total_meetings": len(records),
             "latest_record": latest,
             "all_records": records,
@@ -282,6 +309,51 @@ async def get_company_card(
         raise
     except Exception as e:
         logger.error(f"Error generating card: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# CORPORATE CARD ENDPOINT - 法人カルテ（傘下の店舗ごとの課題有無を一覧化）
+# ============================================================================
+@app.get("/api/corporate-card/{corporate_name}")
+@limiter.limit("30/minute")
+async def get_corporate_card(
+    request: Request,
+    corporate_name: str,
+) -> dict:
+    """
+    法人カルテを取得。傘下の店舗ごとに課題の有無・件数をまとめる。
+
+    Args:
+        corporate_name: 法人名
+
+    Returns:
+        法人カルテデータ（店舗別の課題サマリー）
+    """
+    try:
+        logger.info(f"Generating corporate card for: {corporate_name}")
+        db = get_db_manager()
+        card = db.get_corporate_card(corporate_name)
+
+        if card is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No corporation found: {corporate_name}",
+            )
+
+        return {
+            "success": True,
+            "corporate_name": card["corporate_name"],
+            "store_count": len(card["stores"]),
+            "stores_with_issues": sum(1 for s in card["stores"] if s["has_issues"]),
+            "stores": card["stores"],
+            "generated_at": datetime.now().isoformat(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating corporate card: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

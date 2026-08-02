@@ -25,16 +25,33 @@ class SQLiteManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
-            # companies テーブル
+            # corporations テーブル（法人）
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXISTS companies (
-                    company_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CREATE TABLE IF NOT EXISTS corporations (
+                    corporation_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """
+            )
+
+            # companies テーブル（店舗）。法人への紐付けは任意（単一店舗経営もあるため）。
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS companies (
+                    company_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    corporation_id INTEGER,
+                    name TEXT UNIQUE NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (corporation_id) REFERENCES corporations(corporation_id)
+                )
+                """
+            )
+            self._ensure_column(
+                conn, "companies", "corporation_id", "INTEGER REFERENCES corporations(corporation_id)"
             )
 
             # meetings テーブル
@@ -86,6 +103,33 @@ class SQLiteManager:
             conn.commit()
             logger.info(f"Database initialized: {self.db_path}")
 
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        """既存テーブルに列が無ければ追加する（簡易マイグレーション）"""
+        cursor = conn.cursor()
+        cursor.execute(f"PRAGMA table_info({table})")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+        if column not in existing_columns:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+            logger.info(f"Migrated: added column {column} to {table}")
+
+    def _get_or_create_corporation(
+        self, cursor: sqlite3.Cursor, corporate_name: Optional[str]
+    ) -> Optional[int]:
+        """法人を取得/作成。corporate_name が None の場合は None を返す"""
+        if not corporate_name:
+            return None
+
+        cursor.execute(
+            "SELECT corporation_id FROM corporations WHERE name = ?", (corporate_name,)
+        )
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+
+        cursor.execute("INSERT INTO corporations (name) VALUES (?)", (corporate_name,))
+        return cursor.lastrowid
+
     def save_record(self, record: DiscussionRecord) -> int:
         """
         DiscussionRecord をデータベースに保存
@@ -99,17 +143,27 @@ class SQLiteManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
-            # company を取得/作成
+            corporation_id = self._get_or_create_corporation(
+                cursor, record.company_info.corporate_name
+            )
+
+            # company（店舗）を取得/作成
             company_name = record.company_info.name
-            cursor.execute("SELECT company_id FROM companies WHERE name = ?", (company_name,))
+            cursor.execute("SELECT company_id, corporation_id FROM companies WHERE name = ?", (company_name,))
             result = cursor.fetchone()
 
             if result:
                 company_id = result[0]
+                # 法人名が新たに分かった場合は紐付けを更新する
+                if corporation_id and not result[1]:
+                    cursor.execute(
+                        "UPDATE companies SET corporation_id = ? WHERE company_id = ?",
+                        (corporation_id, company_id),
+                    )
             else:
                 cursor.execute(
-                    "INSERT INTO companies (name) VALUES (?)",
-                    (company_name,),
+                    "INSERT INTO companies (name, corporation_id) VALUES (?, ?)",
+                    (company_name, corporation_id),
                 )
                 company_id = cursor.lastrowid
 
@@ -168,10 +222,10 @@ class SQLiteManager:
         self, company_name: str, limit: int = 100
     ) -> List[dict]:
         """
-        企業の商談一覧を取得
+        店舗の商談一覧を取得
 
         Args:
-            company_name: 店舗名（企業名）
+            company_name: 店舗名
             limit: 取得件数
 
         Returns:
@@ -185,6 +239,7 @@ class SQLiteManager:
                 """
                 SELECT
                     c.name as company_name,
+                    corp.name as corporate_name,
                     m.meeting_uuid,
                     m.contact_name,
                     m.meeting_date,
@@ -192,6 +247,7 @@ class SQLiteManager:
                     dr.summary
                 FROM meetings m
                 JOIN companies c ON m.company_id = c.company_id
+                LEFT JOIN corporations corp ON c.corporation_id = corp.corporation_id
                 LEFT JOIN discussion_records dr ON m.meeting_id = dr.meeting_id
                 WHERE c.name = ?
                 ORDER BY m.meeting_date DESC
@@ -205,13 +261,13 @@ class SQLiteManager:
 
     def get_all_companies(self, limit: int = 100) -> List[dict]:
         """
-        すべての企業一覧を取得
+        すべての店舗一覧を取得
 
         Args:
             limit: 取得件数
 
         Returns:
-            企業リスト
+            店舗リスト（法人名を含む）
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
@@ -222,12 +278,49 @@ class SQLiteManager:
                 SELECT
                     c.company_id,
                     c.name,
+                    corp.name as corporate_name,
                     COUNT(m.meeting_id) as meeting_count,
                     MAX(m.meeting_date) as last_meeting
                 FROM companies c
+                LEFT JOIN corporations corp ON c.corporation_id = corp.corporation_id
                 LEFT JOIN meetings m ON c.company_id = m.company_id
                 GROUP BY c.company_id
                 ORDER BY c.updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    def get_all_corporations(self, limit: int = 100) -> List[dict]:
+        """
+        すべての法人一覧を取得（傘下の店舗数・課題ありの店舗数つき）
+
+        Args:
+            limit: 取得件数
+
+        Returns:
+            法人リスト
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT
+                    corp.corporation_id,
+                    corp.name,
+                    COUNT(DISTINCT c.company_id) as store_count,
+                    COUNT(DISTINCT m.meeting_id) as meeting_count,
+                    MAX(m.meeting_date) as last_meeting
+                FROM corporations corp
+                LEFT JOIN companies c ON c.corporation_id = corp.corporation_id
+                LEFT JOIN meetings m ON m.company_id = c.company_id
+                GROUP BY corp.corporation_id
+                ORDER BY corp.updated_at DESC
                 LIMIT ?
                 """,
                 (limit,),
@@ -257,6 +350,7 @@ class SQLiteManager:
                 """
                 SELECT
                     c.name as company_name,
+                    corp.name as corporate_name,
                     pi.category,
                     pi.issue,
                     pi.priority,
@@ -265,6 +359,7 @@ class SQLiteManager:
                 JOIN discussion_records dr ON pi.record_id = dr.record_id
                 JOIN meetings m ON dr.meeting_id = m.meeting_id
                 JOIN companies c ON m.company_id = c.company_id
+                LEFT JOIN corporations corp ON c.corporation_id = corp.corporation_id
                 WHERE pi.issue LIKE ? OR pi.category LIKE ?
                 ORDER BY pi.priority DESC, m.meeting_date DESC
                 LIMIT ?
@@ -305,10 +400,10 @@ class SQLiteManager:
 
     def get_all_records_for_company(self, company_name: str) -> List[dict]:
         """
-        企業のすべての JSON レコードを取得（法人カルテ用）
+        店舗のすべての JSON レコードを取得（店舗カルテ用）
 
         Args:
-            company_name: 店舗名（企業名）
+            company_name: 店舗名
 
         Returns:
             DiscussionRecord の JSON dict リスト
@@ -333,10 +428,10 @@ class SQLiteManager:
 
     def get_stats_by_category(self, company_name: str) -> dict:
         """
-        企業の課題カテゴリ別統計を取得
+        店舗の課題カテゴリ別統計を取得
 
         Args:
-            company_name: 店舗名（企業名）
+            company_name: 店舗名
 
         Returns:
             カテゴリ別の課題数
@@ -362,6 +457,91 @@ class SQLiteManager:
 
             rows = cursor.fetchall()
             return {row[0]: {"count": row[1], "avg_priority": row[2]} for row in rows}
+
+    def get_corporate_card(self, corporate_name: str) -> Optional[dict]:
+        """
+        法人カルテ用データを取得。傘下の店舗ごとに課題の有無・件数をまとめる。
+
+        Args:
+            corporate_name: 法人名
+
+        Returns:
+            {
+                "corporate_name": str,
+                "stores": [
+                    {
+                        "company_name": str,
+                        "meeting_count": int,
+                        "last_meeting": str | None,
+                        "issue_count": int,
+                        "has_issues": bool,
+                        "top_issue": str | None,
+                    },
+                    ...
+                ]
+            }
+            法人が存在しない場合は None
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "SELECT corporation_id FROM corporations WHERE name = ?", (corporate_name,)
+            )
+            corp_row = cursor.fetchone()
+            if not corp_row:
+                return None
+            corporation_id = corp_row["corporation_id"]
+
+            cursor.execute(
+                """
+                SELECT c.company_id, c.name
+                FROM companies c
+                WHERE c.corporation_id = ?
+                ORDER BY c.name
+                """,
+                (corporation_id,),
+            )
+            stores = []
+            for store_row in cursor.fetchall():
+                company_id = store_row["company_id"]
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) as meeting_count, MAX(m.meeting_date) as last_meeting
+                    FROM meetings m
+                    WHERE m.company_id = ?
+                    """,
+                    (company_id,),
+                )
+                meeting_stats = cursor.fetchone()
+
+                cursor.execute(
+                    """
+                    SELECT pi.issue, pi.priority
+                    FROM priority_issues pi
+                    JOIN discussion_records dr ON pi.record_id = dr.record_id
+                    JOIN meetings m ON dr.meeting_id = m.meeting_id
+                    WHERE m.company_id = ?
+                    ORDER BY pi.priority DESC
+                    """,
+                    (company_id,),
+                )
+                issues = cursor.fetchall()
+
+                stores.append(
+                    {
+                        "company_name": store_row["name"],
+                        "meeting_count": meeting_stats["meeting_count"] or 0,
+                        "last_meeting": meeting_stats["last_meeting"],
+                        "issue_count": len(issues),
+                        "has_issues": len(issues) > 0,
+                        "top_issue": issues[0]["issue"] if issues else None,
+                    }
+                )
+
+            return {"corporate_name": corporate_name, "stores": stores}
 
 
 def get_db_manager() -> SQLiteManager:

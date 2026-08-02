@@ -10,11 +10,14 @@ import { CardPanel } from "@/components/CardPanel";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Home() {
-  const [pendingCompany, setPendingCompany] = useState<string | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<{
+    name: string;
+    kind: "store" | "corporate";
+  } | null>(null);
   const [selectedTab, setSelectedTab] = useState("process");
 
-  const goToCard = (companyName: string) => {
-    setPendingCompany(companyName);
+  const goToCard = (name: string, kind: "store" | "corporate") => {
+    setPendingSelection({ name, kind });
     setSelectedTab("card");
   };
 
@@ -57,15 +60,15 @@ export default function Home() {
           <ProcessPanel />
         </Tabs.Panel>
         <Tabs.Panel id="list" className="animate-in fade-in slide-in-from-bottom-1 pt-6 duration-200">
-          <ListPanel onSelectCompany={goToCard} />
+          <ListPanel onSelectCard={goToCard} />
         </Tabs.Panel>
         <Tabs.Panel id="search" className="animate-in fade-in slide-in-from-bottom-1 pt-6 duration-200">
           <SearchPanel />
         </Tabs.Panel>
         <Tabs.Panel id="card" className="animate-in fade-in slide-in-from-bottom-1 pt-6 duration-200">
           <CardPanel
-            initialCompany={pendingCompany}
-            onCompanyLoaded={() => setPendingCompany(null)}
+            initialSelection={pendingSelection}
+            onSelectionLoaded={() => setPendingSelection(null)}
           />
         </Tabs.Panel>
       </Tabs.Root>

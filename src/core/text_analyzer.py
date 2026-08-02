@@ -21,6 +21,7 @@ class TextAnalyzer:
         self,
         transcription: str,
         company_name: str,
+        corporate_name: Optional[str] = None,
         contact_name: Optional[str] = None,
         meeting_date: Optional[str] = None,
     ) -> DiscussionRecord:
@@ -29,7 +30,8 @@ class TextAnalyzer:
 
         Args:
             transcription: 音声書き起こしテキスト
-            company_name: 店舗名（企業名）
+            company_name: 店舗名
+            corporate_name: 法人名（任意）
             contact_name: 接触者氏名
             meeting_date: 商談日時（ISO 8601 形式）
 
@@ -41,7 +43,7 @@ class TextAnalyzer:
         # プロンプト構築
         system_prompt = self._build_system_prompt()
         user_prompt = self._build_user_prompt(
-            transcription, company_name, contact_name, meeting_date
+            transcription, company_name, corporate_name, contact_name, meeting_date
         )
 
         try:
@@ -59,7 +61,7 @@ class TextAnalyzer:
 
             # DiscussionRecord を構築
             record = self._build_discussion_record(
-                structured_data, company_name, contact_name, meeting_date
+                structured_data, company_name, corporate_name, contact_name, meeting_date
             )
 
             logger.info(
@@ -139,6 +141,7 @@ class TextAnalyzer:
         self,
         transcription: str,
         company_name: str,
+        corporate_name: Optional[str],
         contact_name: Optional[str],
         meeting_date: Optional[str],
     ) -> str:
@@ -146,6 +149,7 @@ class TextAnalyzer:
         context = f"""
 【商談情報】
 店舗名：{company_name}
+法人名：{corporate_name or "不明（単一店舗経営の可能性）"}
 接触者：{contact_name or "不明"}
 日時：{meeting_date or "不明"}
 
@@ -183,6 +187,7 @@ JSON フォーマットで返してください。
         self,
         structured_data: dict,
         company_name: str,
+        corporate_name: Optional[str],
         contact_name: Optional[str],
         meeting_date: Optional[str],
     ) -> DiscussionRecord:
@@ -196,6 +201,7 @@ JSON フォーマットで返してください。
         # company_info を構築
         company_info = CompanyInfo(
             name=company_name,
+            corporate_name=corporate_name,
             contact_name=contact_name or "不明",
             date=dt.fromisoformat(meeting_date) if meeting_date else now,
         )

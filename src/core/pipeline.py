@@ -25,6 +25,7 @@ class DiscussionPipeline:
         self,
         audio_file: Path,
         company_name: str,
+        corporate_name: Optional[str] = None,
         contact_name: Optional[str] = None,
         meeting_date: Optional[str] = None,
         notes: Optional[str] = None,
@@ -34,7 +35,8 @@ class DiscussionPipeline:
 
         Args:
             audio_file: 音声ファイルパス
-            company_name: 店舗名（企業名）
+            company_name: 店舗名
+            corporate_name: 法人名（任意）
             contact_name: 接触者氏名
             meeting_date: 商談日時（ISO 8601 形式）
             notes: 手動補足メモ
@@ -60,6 +62,7 @@ class DiscussionPipeline:
             record = self.text_analyzer.analyze(
                 transcription=transcription_text,
                 company_name=company_name,
+                corporate_name=corporate_name,
                 contact_name=contact_name,
                 meeting_date=meeting_date,
             )
@@ -108,6 +111,7 @@ class DiscussionPipeline:
         self,
         audio_file: Path,
         company_name: str,
+        corporate_name: Optional[str] = None,
         contact_name: Optional[str] = None,
         meeting_date: Optional[str] = None,
         notes: Optional[str] = None,
@@ -122,6 +126,7 @@ class DiscussionPipeline:
         record = self.process_audio_file(
             audio_file=audio_file,
             company_name=company_name,
+            corporate_name=corporate_name,
             contact_name=contact_name,
             meeting_date=meeting_date,
             notes=notes,

@@ -79,6 +79,7 @@ class PriorityCategory(str, Enum):
 # Company Info
 class CompanyInfo(BaseModel):
     name: str = Field(..., description="店舗名")
+    corporate_name: Optional[str] = Field(None, description="法人名（任意。単一店舗経営の場合は不要）")
     contact_name: str = Field(..., description="接触者氏名")
     contact_phone: Optional[str] = None
     contact_email: Optional[EmailStr] = None

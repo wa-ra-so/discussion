@@ -108,6 +108,11 @@ export function SearchPanel() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{issue.company_name}</span>
+                        {issue.corporate_name && (
+                          <span className="text-xs text-neutral-500">
+                            ({issue.corporate_name})
+                          </span>
+                        )}
                         <Chip size="sm" color={categoryColor(issue.category)}>
                           <Chip.Label>{categoryLabel(issue.category)}</Chip.Label>
                         </Chip>

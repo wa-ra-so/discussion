@@ -9,11 +9,12 @@ import { Input } from "@heroui/react";
 import { Spinner } from "@heroui/react";
 import { Alert } from "@heroui/react";
 import { Chip } from "@heroui/react";
-import { Search, Building2 } from "lucide-react";
-import { ApiRequestError, getCompanyCard } from "@/lib/api";
+import { Search, Building2, Store, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ApiRequestError, getCompanyCard, getCorporateCard } from "@/lib/api";
 import { categoryColor, categoryLabel, formatDate } from "@/lib/constants";
 import { PriorityIndicator } from "@/components/PriorityIndicator";
-import type { CardResponse } from "@/lib/types";
+import { EmptyState } from "@/components/EmptyState";
+import type { CardResponse, CorporateCardResponse } from "@/lib/types";
 
 type RecruitmentSection = {
   assumed_issues?: string;
@@ -45,22 +46,27 @@ type InboundSection = {
   multilingual_support?: string;
 };
 
+type Mode = "store" | "corporate";
+
 export function CardPanel({
-  initialCompany,
-  onCompanyLoaded,
+  initialSelection,
+  onSelectionLoaded,
 }: {
-  initialCompany?: string | null;
-  onCompanyLoaded?: () => void;
+  initialSelection?: { name: string; kind: Mode } | null;
+  onSelectionLoaded?: () => void;
 }) {
-  const [companyName, setCompanyName] = useState(initialCompany ?? "");
+  const [mode, setMode] = useState<Mode>(initialSelection?.kind ?? "store");
+  const [query, setQuery] = useState(initialSelection?.name ?? "");
   const [card, setCard] = useState<CardResponse | null>(null);
+  const [corporateCard, setCorporateCard] = useState<CorporateCardResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadCard = async (name: string) => {
+  const loadStoreCard = async (name: string) => {
     if (!name.trim()) return;
     setIsLoading(true);
     setError(null);
+    setCorporateCard(null);
     try {
       const data = await getCompanyCard(name.trim());
       setCard(data);
@@ -78,14 +84,46 @@ export function CardPanel({
     }
   };
 
+  const loadCorporateCard = async (name: string) => {
+    if (!name.trim()) return;
+    setIsLoading(true);
+    setError(null);
+    setCard(null);
+    try {
+      const data = await getCorporateCard(name.trim());
+      setCorporateCard(data);
+    } catch (err) {
+      setCorporateCard(null);
+      setError(
+        err instanceof ApiRequestError
+          ? err.status === 404
+            ? `'${name}' という法人は見つかりません`
+            : err.message
+          : "取得に失敗しました",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
+    if (mode === "store") loadStoreCard(query);
+    else loadCorporateCard(query);
+  };
+
   useEffect(() => {
-    if (initialCompany) {
-      setCompanyName(initialCompany);
-      loadCard(initialCompany);
-      onCompanyLoaded?.();
+    if (initialSelection) {
+      setMode(initialSelection.kind);
+      setQuery(initialSelection.name);
+      if (initialSelection.kind === "corporate") {
+        loadCorporateCard(initialSelection.name);
+      } else {
+        loadStoreCard(initialSelection.name);
+      }
+      onSelectionLoaded?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialCompany]);
+  }, [initialSelection]);
 
   const latest = card?.latest_record;
   const discussions = (latest?.discussions ?? {}) as {
@@ -99,25 +137,42 @@ export function CardPanel({
     <div className="flex flex-col gap-6">
       <Card.Root>
         <Card.Header>
-          <Card.Title>法人カルテ</Card.Title>
-          <Card.Description>企業名を指定して商談履歴を集約表示します</Card.Description>
+          <Card.Title>カルテ検索</Card.Title>
+          <Card.Description>
+            法人（複数店舗をまとめて確認）または店舗（個別の商談履歴）を指定します
+          </Card.Description>
         </Card.Header>
         <Card.Content className="flex flex-col gap-4">
+          <div className="flex gap-2">
+            <Button
+              variant={mode === "store" ? "primary" : "outline"}
+              onClick={() => setMode("store")}
+            >
+              <Store className="mr-1.5 h-4 w-4" /> 店舗で見る
+            </Button>
+            <Button
+              variant={mode === "corporate" ? "primary" : "outline"}
+              onClick={() => setMode("corporate")}
+            >
+              <Building2 className="mr-1.5 h-4 w-4" /> 法人で見る
+            </Button>
+          </div>
+
           <div className="flex items-end gap-3">
             <TextField.Root
-              value={companyName}
-              onChange={setCompanyName}
+              value={query}
+              onChange={setQuery}
               className="flex flex-1 flex-col gap-1.5"
             >
-              <Label>店舗名</Label>
+              <Label>{mode === "store" ? "店舗名" : "法人名"}</Label>
               <Input
-                placeholder="レストランA"
+                placeholder={mode === "store" ? "レストランA 渋谷店" : "株式会社レストランA"}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") loadCard(companyName);
+                  if (e.key === "Enter") handleSearch();
                 }}
               />
             </TextField.Root>
-            <Button onClick={() => loadCard(companyName)} isDisabled={isLoading}>
+            <Button onClick={handleSearch} isDisabled={isLoading}>
               <Search className="mr-1 h-4 w-4" /> カルテ表示
             </Button>
           </div>
@@ -138,15 +193,67 @@ export function CardPanel({
         </Card.Content>
       </Card.Root>
 
-      {card && latest && (
+      {mode === "corporate" && corporateCard && (
+        <Card.Root>
+          <Card.Header>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-[var(--accent)]" />
+              <Card.Title>{corporateCard.corporate_name}</Card.Title>
+            </div>
+            <Card.Description>
+              傘下店舗数: {corporateCard.store_count}店舗 ／ 課題ありの店舗:{" "}
+              {corporateCard.stores_with_issues}店舗 ／ 更新: {formatDate(corporateCard.generated_at)}
+            </Card.Description>
+          </Card.Header>
+          <Card.Content className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
+            {corporateCard.stores.length === 0 && (
+              <EmptyState icon={Store} message="傘下の店舗記録がありません" />
+            )}
+            {corporateCard.stores.map((store) => (
+              <button
+                key={store.company_name}
+                onClick={() => {
+                  setMode("store");
+                  setQuery(store.company_name);
+                  loadStoreCard(store.company_name);
+                }}
+                className="flex cursor-pointer items-center justify-between gap-4 rounded-lg py-3 text-left transition-colors duration-150 hover:bg-[var(--surface-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+              >
+                <div className="flex items-center gap-3">
+                  {store.has_issues ? (
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-[var(--danger)]" />
+                  ) : (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-[var(--success)]" />
+                  )}
+                  <div>
+                    <p className="font-medium">{store.company_name}</p>
+                    <p className="text-xs text-neutral-500">
+                      商談{store.meeting_count}件 ／ 最終: {formatDate(store.last_meeting)}
+                      {store.top_issue && ` ／ 主課題: ${store.top_issue}`}
+                    </p>
+                  </div>
+                </div>
+                <Chip size="sm" color={store.has_issues ? "danger" : "success"}>
+                  <Chip.Label>
+                    {store.has_issues ? `課題 ${store.issue_count}件` : "課題なし"}
+                  </Chip.Label>
+                </Chip>
+              </button>
+            ))}
+          </Card.Content>
+        </Card.Root>
+      )}
+
+      {mode === "store" && card && latest && (
         <>
           <Card.Root>
             <Card.Header>
               <div className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-blue-600" />
+                <Store className="h-5 w-5 text-[var(--accent)]" />
                 <Card.Title>{card.company_name}</Card.Title>
               </div>
               <Card.Description>
+                {card.corporate_name && <>法人: {card.corporate_name} ／ </>}
                 接触者: {latest.company_info.contact_name} ／ 商談件数: {card.total_meetings}件 ／
                 最終更新: {formatDate(card.generated_at)}
               </Card.Description>

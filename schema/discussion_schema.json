@@ -25,6 +25,10 @@
           "type": "string",
           "description": "店舗名"
         },
+        "corporate_name": {
+          "type": "string",
+          "description": "法人名（任意。単一店舗経営の場合は不要）"
+        },
         "contact_name": {
           "type": "string",
           "description": "接触者氏名"

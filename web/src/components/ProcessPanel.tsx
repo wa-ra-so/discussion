@@ -23,6 +23,7 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024;
 export function ProcessPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [companyName, setCompanyName] = useState("");
+  const [corporateName, setCorporateName] = useState("");
   const [contactName, setContactName] = useState("");
   const [meetingDate, setMeetingDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -67,6 +68,7 @@ export function ProcessPanel() {
       const data = await processAudio({
         file,
         companyName: companyName.trim(),
+        corporateName: corporateName.trim() || undefined,
         contactName: contactName.trim() || undefined,
         meetingDate: meetingDate || undefined,
         notes: notes.trim() || undefined,
@@ -143,7 +145,16 @@ export function ProcessPanel() {
               className="flex flex-col gap-1.5"
             >
               <Label>店舗名</Label>
-              <Input placeholder="レストランA" />
+              <Input placeholder="レストランA 渋谷店" />
+            </TextField.Root>
+
+            <TextField.Root
+              value={corporateName}
+              onChange={setCorporateName}
+              className="flex flex-col gap-1.5"
+            >
+              <Label>法人名（複数店舗経営の場合のみ）</Label>
+              <Input placeholder="株式会社レストランA" />
             </TextField.Root>
 
             <TextField.Root
@@ -223,6 +234,12 @@ export function ProcessPanel() {
                 <p className="text-neutral-500">店舗名</p>
                 <p className="font-medium">{result.company_name}</p>
               </div>
+              {result.corporate_name && (
+                <div>
+                  <p className="text-neutral-500">法人名</p>
+                  <p className="font-medium">{result.corporate_name}</p>
+                </div>
+              )}
               <div>
                 <p className="text-neutral-500">接触者</p>
                 <p className="font-medium">{result.contact_name}</p>

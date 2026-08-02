@@ -20,7 +20,10 @@ def process(
         exists=True,
     ),
     company_name: str = typer.Option(
-        ..., "--company", "-c", help="店舗名（企業名）"
+        ..., "--company", "-c", help="店舗名"
+    ),
+    corporate_name: Optional[str] = typer.Option(
+        None, "--corporate", "-corp", help="法人名（任意。単一店舗経営の場合は不要）"
     ),
     contact_name: Optional[str] = typer.Option(
         None, "--contact", "-n", help="接触者氏名"
@@ -99,6 +102,8 @@ def process(
         typer.echo(typer.style("🎤 商談音声解析を開始します", fg=typer.colors.BLUE))
         typer.echo(f"   ファイル: {audio_file.name}")
         typer.echo(f"   店舗名: {company_name}")
+        if corporate_name:
+            typer.echo(f"   法人名: {corporate_name}")
         if contact_name:
             typer.echo(f"   接触者: {contact_name}")
         if meeting_date:
@@ -110,6 +115,7 @@ def process(
         record, filepath = pipeline.process_and_save(
             audio_file=audio_file,
             company_name=company_name,
+            corporate_name=corporate_name,
             contact_name=contact_name,
             meeting_date=meeting_date,
             notes=notes,

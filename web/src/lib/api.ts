@@ -1,5 +1,6 @@
 import type {
   CardResponse,
+  CorporateCardResponse,
   ListMeetingsResponse,
   ProcessResult,
   SearchResponse,
@@ -34,6 +35,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export async function processAudio(params: {
   file: File;
   companyName: string;
+  corporateName?: string;
   contactName?: string;
   meetingDate?: string;
   notes?: string;
@@ -41,6 +43,7 @@ export async function processAudio(params: {
   const formData = new FormData();
   formData.append("file", params.file);
   formData.append("company_name", params.companyName);
+  if (params.corporateName) formData.append("corporate_name", params.corporateName);
   if (params.contactName) formData.append("contact_name", params.contactName);
   if (params.meetingDate) formData.append("meeting_date", params.meetingDate);
   if (params.notes) formData.append("notes", params.notes);
@@ -55,10 +58,12 @@ export async function processAudio(params: {
 
 export async function listMeetings(params?: {
   companyName?: string;
+  corporateName?: string;
   limit?: number;
 }): Promise<ListMeetingsResponse> {
   const searchParams = new URLSearchParams();
   if (params?.companyName) searchParams.set("company_name", params.companyName);
+  if (params?.corporateName) searchParams.set("corporate_name", params.corporateName);
   if (params?.limit) searchParams.set("limit", String(params.limit));
 
   const response = await fetch(
@@ -88,6 +93,16 @@ export async function getCompanyCard(companyName: string): Promise<CardResponse>
   );
 
   return handleResponse<CardResponse>(response);
+}
+
+export async function getCorporateCard(
+  corporateName: string,
+): Promise<CorporateCardResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/corporate-card/${encodeURIComponent(corporateName)}`,
+  );
+
+  return handleResponse<CorporateCardResponse>(response);
 }
 
 export async function checkHealth(): Promise<{ status: string; timestamp: string }> {
