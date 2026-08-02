@@ -14,6 +14,10 @@ RUN echo "setuptools<81" > /tmp/constraints.txt
 ENV PIP_CONSTRAINT=/tmp/constraints.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Whisper モデルをビルド時に取り込んでおく（実行時ダウンロードだと初回リクエストが
+# 遅延・タイムアウトする上、コンテナ再起動のたびに再ダウンロードが発生してしまうため）。
+RUN python -c "import whisper; whisper.load_model('base')"
+
 COPY schema/ ./schema/
 COPY src/ ./src/
 
