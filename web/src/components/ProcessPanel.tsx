@@ -78,9 +78,16 @@ export function ProcessPanel() {
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
       if (err instanceof ApiRequestError) {
-        setError(err.message);
+        setError(`サーバーエラー (HTTP ${err.status}): ${err.message}`);
+      } else if (err instanceof TypeError) {
+        // fetch() 自体が失敗（サーバー未応答・CORSブロック・タイムアウトなど）
+        setError(
+          `サーバーに接続できませんでした（${err.message}）。バックエンドが起動しているか、` +
+            "CORS設定、処理時間のタイムアウトを確認してください。",
+        );
       } else {
-        setError("処理中に予期しないエラーが発生しました");
+        const message = err instanceof Error ? err.message : String(err);
+        setError(`処理中に予期しないエラーが発生しました: ${message}`);
       }
     } finally {
       setIsLoading(false);
