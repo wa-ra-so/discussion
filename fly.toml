@@ -6,7 +6,10 @@ primary_region = "nrt"
 [env]
   PYTHONUNBUFFERED = "true"
   WHISPER_MODEL = "base"
-  CORS_ORIGINS = "https://discussion-app.vercel.app"
+  # CORS の Origin にはパスを含めない（スキーム+ホストのみ）。
+  # GitHub Pages のプロジェクトページは https://<owner>.github.io がオリジンになる
+  # （配信パスが /discussion/ でも Origin ヘッダー自体はリポジトリ名を含まない）。
+  CORS_ORIGINS = "https://wa-ra-so.github.io"
 
 [http_service]
   internal_port = 8000

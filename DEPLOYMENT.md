@@ -46,11 +46,11 @@ curl https://discussion-api.fly.dev/api/health
 
 ### CORS の許可オリジンを更新
 
-`fly.toml` の `CORS_ORIGINS` を実際のフロントエンドURLに変更してから再デプロイ（GitHub Pages の場合はプロジェクトページのURL、例: `https://<owner>.github.io`）:
+`fly.toml` の `CORS_ORIGINS` を実際のフロントエンドURLに変更してから再デプロイ（GitHub Pages の場合はプロジェクトページのURL、例: `https://wa-ra-so.github.io`）:
 
 ```toml
 [env]
-  CORS_ORIGINS = "https://<owner>.github.io"
+  CORS_ORIGINS = "https://wa-ra-so.github.io"
 ```
 
 ```bash
@@ -89,7 +89,7 @@ flyctl deploy
 
 4. **公開URLを確認**
 
-   `https://<owner>.github.io/discussion/` でアクセスできます（リポジトリ名が `discussion` でない場合は `web/next.config.ts` の `repoName` を実際のリポジトリ名に合わせてください）。
+   `https://wa-ra-so.github.io/discussion/` でアクセスできます（リポジトリ名が `discussion` でない場合は `web/next.config.ts` の `repoName` を実際のリポジトリ名に合わせてください）。
 
 ### ローカルで GitHub Pages 相当のビルドを試す
 
