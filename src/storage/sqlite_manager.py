@@ -224,7 +224,7 @@ class SQLiteManager:
                     """,
                     (
                         record_id,
-                        issue.category.value,
+                        issue.category,
                         issue.issue,
                         issue.priority,
                     ),

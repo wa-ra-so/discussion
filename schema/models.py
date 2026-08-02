@@ -1,79 +1,14 @@
 from datetime import datetime
 from typing import Optional, List
-from enum import Enum
 from pydantic import BaseModel, Field, EmailStr
 
-
-# Enums
-class ReservationMethod(str, Enum):
-    PAPER_LEDGER = "paper_ledger"
-    ONLINE_POS = "online_pos"
-    GOOGLE_CALENDAR = "google_calendar"
-    OTHER = "other"
-
-
-class ReservationChannel(str, Enum):
-    TABELOG = "tabelog"
-    HOT_PEPPER = "hot_pepper"
-    GURUNAVI = "gurunavi"
-    IKYU = "ikyu"
-    RETTY = "retty"
-    SNS = "sns"
-    GOOGLE = "google"
-    HOMEPAGE = "homepage"
-    OTHER = "other"
-
-
-class PhoneFrequency(str, Enum):
-    FREQUENT = "frequent"
-    OCCASIONAL = "occasional"
-    SOMETIMES_MISSED = "sometimes_missed"
-
-
-class DoublebookingIssue(str, Enum):
-    PAST_OCCURRENCE = "past_occurrence"
-    NO_OCCURRENCE_BUT_WORRIED = "no_occurrence_but_worried"
-    RULES_IN_PLACE = "rules_in_place"
-
-
-class OrderingMethod(str, Enum):
-    VERBAL = "verbal"
-    MOBILE_ORDER = "mobile_order"
-    TABLE_TABLET = "table_tablet"
-    TICKET_MACHINE = "ticket_machine"
-    PRE_PAYMENT = "pre_payment"
-    OTHER = "other"
-
-
-class OrderingChannel(str, Enum):
-    FAX = "fax"
-    PHONE = "phone"
-    LINE_EMAIL = "line_email"
-    VENDOR_WEB = "vendor_web"
-    UNIFIED_SYSTEM = "unified_system"
-    OTHER = "other"
-
-
-class OrderingResponsible(str, Enum):
-    OWNER_MANAGER = "owner_manager"
-    CHEF = "chef"
-    SPECIFIC_STAFF = "specific_staff"
-    ANYONE = "anyone"
-
-
-class MultilingualSupport(str, Enum):
-    FULLY_SUPPORTED = "fully_supported"
-    NO_MENU_TRANSLATION = "no_menu_translation"
-    PAYMENT_ISSUES = "payment_issues"
-    NO_MEASURES = "no_measures"
-
-
-class PriorityCategory(str, Enum):
-    MARKETING = "marketing"
-    RESERVATION_EFFICIENCY = "reservation_efficiency"
-    COST_REDUCTION = "cost_reduction"
-    RECRUITMENT = "recruitment"
-    INBOUND = "inbound"
+# 分類が必要な項目（予約方法・優先課題カテゴリ等）は、以前は厳密な Enum で
+# 制約していたが、AIの自由記述（特に日本語の商談内容から抽出した場合）が
+# 期待した英語の列挙値と完全一致しないことがあり、そのたびに解析全体が
+# ValidationError で失敗していた。実際に絞り込み等の用途で使われるのは
+# priority_issues.category のみで、他は表示用の自由記述として扱って
+# 問題ないため、プレーンな文字列として受け付ける（想定値はプロンプト側で
+# 誘導する）。
 
 
 # Company Info
@@ -145,31 +80,31 @@ class SiteController(BaseModel):
 
 
 class PhoneResponse(BaseModel):
-    frequency: Optional[PhoneFrequency] = None
+    frequency: Optional[str] = None
     daily_calls: Optional[int] = None
 
 
 class BookingEfficiencySection(BaseModel):
     assumed_issues: Optional[str] = None
-    current_reservation_method: Optional[List[ReservationMethod]] = None
+    current_reservation_method: Optional[List[str]] = None
     net_reservation_status: Optional[bool] = None
     site_controller_usage: Optional[SiteController] = None
-    reservation_channels: Optional[List[ReservationChannel]] = None
+    reservation_channels: Optional[List[str]] = None
     phone_response: Optional[PhoneResponse] = None
-    double_booking_issues: Optional[DoublebookingIssue] = None
-    ordering_method: Optional[List[OrderingMethod]] = None
+    double_booking_issues: Optional[str] = None
+    ordering_method: Optional[List[str]] = None
     pos_system: Optional[str] = None
-    current_ordering_method: Optional[List[OrderingChannel]] = None
+    current_ordering_method: Optional[List[str]] = None
     daily_ordering_time: Optional[float] = None
     ordering_timing: Optional[List[str]] = None
-    ordering_responsible: Optional[OrderingResponsible] = None
+    ordering_responsible: Optional[str] = None
 
 
 # Inbound Section
 class InboundSection(BaseModel):
     assumed_issues: Optional[str] = None
     monthly_foreign_guests: Optional[int] = None
-    multilingual_support: Optional[MultilingualSupport] = None
+    multilingual_support: Optional[str] = None
 
 
 # Discussions (all sections combined)
@@ -182,7 +117,7 @@ class Discussions(BaseModel):
 
 # Priority Issue
 class PriorityIssue(BaseModel):
-    category: PriorityCategory
+    category: str
     issue: str
     priority: Optional[int] = Field(None, ge=1, le=5)
 

@@ -119,19 +119,19 @@ class TextAnalyzer:
       "current_initiatives": "string or null"
     },
     "booking_efficiency": {
-      "current_reservation_method": ["string"],
-      "phone_response": {"frequency": "string or null", "daily_calls": number or null},
+      "current_reservation_method": ["string（例: 台帳・電話・ネット予約・オンラインPOS・Googleカレンダー・その他）"],
+      "phone_response": {"frequency": "string or null（例: 頻繁にある・たまにある・対応漏れがある）", "daily_calls": number or null},
       "daily_ordering_time": number or null,
-      "ordering_responsible": "string or null"
+      "ordering_responsible": "string or null（例: 店長・オーナー・シェフ・特定スタッフ・誰でも対応）"
     },
     "inbound": {
       "monthly_foreign_guests": number or null,
-      "multilingual_support": "string or null"
+      "multilingual_support": "string or null（例: 十分対応できている・メニュー未翻訳・会計時に問題がある・特に対策していない）"
     }
   },
   "priority_issues": [
     {
-      "category": "string",
+      "category": "marketing | reservation_efficiency | cost_reduction | recruitment | inbound のいずれか",
       "issue": "string",
       "priority": number (1-5)
     }

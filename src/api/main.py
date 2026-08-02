@@ -58,7 +58,7 @@ def _record_to_dict(record: DiscussionRecord) -> dict:
         "summary": record.summary,
         "priority_issues": [
             {
-                "category": issue.category.value,
+                "category": issue.category,
                 "issue": issue.issue,
                 "priority": issue.priority,
             }
