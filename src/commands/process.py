@@ -9,14 +9,14 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-app = typer.Typer(help="音声ファイル処理コマンド")
+app = typer.Typer(help="商談テキスト処理コマンド")
 
 
 @app.command()
 def process(
-    audio_file: Path = typer.Argument(
+    transcript_file: Path = typer.Argument(
         ...,
-        help="商談音声ファイルのパス (MP3/WAV)",
+        help="文字起こし済みテキストファイルのパス (.txt)",
         exists=True,
     ),
     company_name: str = typer.Option(
@@ -48,41 +48,19 @@ def process(
     ),
 ) -> None:
     """
-    商談音声ファイルを処理し、ディスカッション内容を自動抽出
+    文字起こし済みの商談テキストを処理し、ディスカッション内容を自動抽出
 
-    音声ファイルから以下の処理を実行します：
-    1. 音声 → テキスト（Whisper）
-    2. テキスト → ディスカッション項目（Claude API）
-    3. 結果を JSON で保存
+    以下の処理を実行します：
+    1. テキスト → ディスカッション項目（Claude API）
+    2. 結果を JSON で保存 + 法人/店舗別に DB へ蓄積
 
     Example:
-        discussion process meeting.wav --company "レストランA" --contact "山田太郎"
-        discussion process meeting.mp3 -c "レストランB" -d "2024-01-31T14:00:00"
+        discussion process meeting.txt --company "レストランA" --contact "山田太郎"
+        discussion process meeting.txt -c "レストランB" -d "2024-01-31T14:00:00"
     """
 
-    # ロギングレベルの設定
     if verbose:
         logger.setLevel("DEBUG")
-
-    # 検証
-    if not audio_file.exists():
-        typer.echo(
-            typer.style(
-                f"✗ エラー: ファイルが見つかりません: {audio_file}",
-                fg=typer.colors.RED,
-            )
-        )
-        raise typer.Exit(code=1)
-
-    supported_formats = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
-    if audio_file.suffix.lower() not in supported_formats:
-        typer.echo(
-            typer.style(
-                f"✗ エラー: サポートされていないフォーマット: {audio_file.suffix}",
-                fg=typer.colors.RED,
-            )
-        )
-        raise typer.Exit(code=1)
 
     if meeting_date:
         try:
@@ -96,11 +74,21 @@ def process(
             )
             raise typer.Exit(code=1)
 
+    transcript_text = transcript_file.read_text(encoding="utf-8").strip()
+    if not transcript_text:
+        typer.echo(
+            typer.style(
+                f"✗ エラー: テキストファイルが空です: {transcript_file}",
+                fg=typer.colors.RED,
+            )
+        )
+        raise typer.Exit(code=1)
+
     # パイプラインを実行
     try:
         typer.echo()
-        typer.echo(typer.style("🎤 商談音声解析を開始します", fg=typer.colors.BLUE))
-        typer.echo(f"   ファイル: {audio_file.name}")
+        typer.echo(typer.style("📝 商談テキスト解析を開始します", fg=typer.colors.BLUE))
+        typer.echo(f"   ファイル: {transcript_file.name}")
         typer.echo(f"   店舗名: {company_name}")
         if corporate_name:
             typer.echo(f"   法人名: {corporate_name}")
@@ -113,7 +101,7 @@ def process(
         # パイプライン実行
         pipeline = get_pipeline()
         record, filepath = pipeline.process_and_save(
-            audio_file=audio_file,
+            transcript_text=transcript_text,
             company_name=company_name,
             corporate_name=corporate_name,
             contact_name=contact_name,
@@ -169,11 +157,6 @@ def process(
         typer.echo(typer.style("💾 JSON ファイルが保存されました", fg=typer.colors.CYAN))
         typer.echo(f"   {filepath}")
 
-    except FileNotFoundError as e:
-        typer.echo(
-            typer.style(f"✗ エラー: ファイルが見つかりません: {e}", fg=typer.colors.RED)
-        )
-        raise typer.Exit(code=1)
     except Exception as e:
         typer.echo(
             typer.style(f"✗ エラーが発生しました: {e}", fg=typer.colors.RED)

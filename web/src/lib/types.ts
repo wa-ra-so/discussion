@@ -23,22 +23,6 @@ export interface ProcessResult {
   created_at: string;
 }
 
-export interface ProcessJobStartResponse {
-  success: boolean;
-  job_id: string;
-  status: "pending";
-}
-
-export type ProcessJobStatus = "pending" | "completed" | "failed";
-
-export interface ProcessJobStatusResponse {
-  success: boolean;
-  job_id: string;
-  status: ProcessJobStatus;
-  result: ProcessResult | null;
-  error: string | null;
-}
-
 export interface CompanySummary {
   company_id: number;
   name: string;

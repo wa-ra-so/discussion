@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Tabs } from "@heroui/react";
-import { UploadCloud, ListChecks, Search, IdCard, MessageSquareText } from "lucide-react";
+import { FileText, ListChecks, Search, IdCard, MessageSquareText } from "lucide-react";
 import { ProcessPanel } from "@/components/ProcessPanel";
 import { ListPanel } from "@/components/ListPanel";
 import { SearchPanel } from "@/components/SearchPanel";
@@ -31,7 +31,7 @@ export default function Home() {
           <div className="flex flex-col gap-0.5">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">商談解析システム</h1>
             <p className="text-sm text-neutral-600 dark:text-neutral-400 sm:text-base">
-              食べログ営業向け ― 商談音声を自動解析し、法人カルテとして蓄積します
+              食べログ営業向け ― 文字起こし済みの商談テキストを解析し、法人カルテとして蓄積します
             </p>
           </div>
         </div>
@@ -42,7 +42,7 @@ export default function Home() {
         <Tabs.ListContainer>
           <Tabs.List className="flex gap-1">
             <Tabs.Tab id="process">
-              <UploadCloud className="mr-1.5 h-4 w-4" /> 音声処理
+              <FileText className="mr-1.5 h-4 w-4" /> テキスト解析
             </Tabs.Tab>
             <Tabs.Tab id="list">
               <ListChecks className="mr-1.5 h-4 w-4" /> 一覧
@@ -74,7 +74,7 @@ export default function Home() {
       </Tabs.Root>
 
       <footer className="pb-4 pt-8 text-center text-xs text-neutral-400">
-        Discussion System · Powered by Whisper + Claude API
+        Discussion System · Powered by Claude API
       </footer>
     </div>
   );

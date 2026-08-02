@@ -121,7 +121,6 @@ def init() -> None:
 
     typer.echo("✓ ディレクトリを作成しています...")
     typer.echo(f"  - Data directory: {settings.data_dir}")
-    typer.echo(f"  - Audio directory: {settings.audio_dir}")
     typer.echo(f"  - Records directory: {settings.records_dir}")
     typer.echo(f"  - Database: {settings.db_path}")
     # Phase 1 で実装

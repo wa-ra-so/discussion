@@ -1,30 +1,33 @@
 # Discussion System - 食べログ営業向け商談解析システム
 
-商談音声を自動解析し、ディスカッションシートの項目を構造化データ（JSON）として保存・管理するシステムです。CLI と Web UI の両方から利用できます。
+文字起こし済みの商談テキストを自動解析し、ディスカッションシートの項目を構造化データ（JSON）として保存・管理するシステムです。CLI と Web UI の両方から利用できます。
 
 ## 概要
 
 このシステムは、食べログ営業が店舗との商談中に得た情報を以下の流れで効率化します：
 
 ```
-商談音声 (MP3/WAV)
+文字起こし済みテキスト（音声認識アプリ等で事前に作成）
     ↓
-Whisper (自動音声認識)
+Claude API（テキスト解析 + ディスカッション項目への自動マッピング）
     ↓
-Claude API (テキスト解析 + ディスカッション項目への自動マッピング)
+法人名 → 店舗名 の階層に整理して蓄積（SQLite）
     ↓
-JSON 形式の構造化記録 + SQLite への蓄積
+JSON 形式の構造化記録
     ↓
 法人カルテ生成（CLI: Markdown/JSON、Web UI: ブラウザ表示）
 ```
 
+音声認識（文字起こし）自体はこのシステムでは行いません。既に文字起こし済みのテキスト（スマホの録音アプリの文字起こし機能や他の文字起こしツールの出力など）を入力として使う前提です。
+
 ## 主な機能
 
 - ✅ JSON スキーマ・Pydantic モデル（ディスカッション6セクション全対応）
-- ✅ 音声認識（Whisper）+ テキスト解析（Claude API）による自動抽出
+- ✅ Claude API によるテキストからの自動抽出
+- ✅ 法人（corporate）→ 店舗（company）の階層管理、法人カルテで店舗ごとの課題有無を一覧化
 - ✅ SQLite への蓄積・企業別検索・法人カルテ生成
 - ✅ CLI（Typer）と Web UI（Next.js + HeroUI）の両対応
-- ✅ FastAPI バックエンド（レート制限・CORS 設定済み）
+- ✅ FastAPI バックエンド（レート制限設定済み）。本番はフロントエンドの静的ビルドも同一プロセスから配信し、CORSの設定ミスが起きないようにしている
 
 ## ディスカッション項目
 
@@ -43,8 +46,7 @@ JSON 形式の構造化記録 + SQLite への蓄積
 discussion/
 ├── pyproject.toml / requirements.txt   # Python 依存関係
 ├── .env.example                        # 環境変数テンプレート
-├── Dockerfile / fly.toml               # バックエンドのデプロイ設定
-├── DEPLOYMENT.md                       # デプロイ手順（Fly.io + Vercel）
+├── Dockerfile / fly.toml               # デプロイ設定（フロント+バックエンド一体）
 │
 ├── schema/
 │   ├── discussion_schema.json          # JSON スキーマ定義（マスター）
@@ -53,18 +55,18 @@ discussion/
 ├── src/
 │   ├── main.py                         # CLI エントリーポイント
 │   ├── config.py                       # 設定管理（環境変数）
-│   ├── api/main.py                     # FastAPI バックエンド
-│   ├── core/                           # Whisper・Claude API・パイプライン
+│   ├── api/main.py                     # FastAPI バックエンド（フロント静的配信も兼ねる）
+│   ├── core/                           # Claude API・パイプライン
 │   ├── storage/sqlite_manager.py       # SQLite 蓄積・検索
 │   └── commands/                       # CLI コマンド実装
 │
-├── web/                                # Next.js + HeroUI フロントエンド
+├── web/                                # Next.js + HeroUI フロントエンド（静的書き出し）
 │   └── src/
 │       ├── app/page.tsx                # メイン画面（タブ切り替え）
 │       ├── components/                 # Process/List/Search/Card パネル
 │       └── lib/                        # API クライアント・型定義
 │
-└── data/                                # 音声・JSON記録・SQLite（gitignore対象）
+└── data/                                # JSON記録・SQLite（gitignore対象）
 ```
 
 ## セットアップ
@@ -97,7 +99,7 @@ echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 
 ## 使用方法
 
-### Web UI（推奨）
+### Web UI（推奨・ローカル開発時）
 
 **ターミナル1: バックエンド**
 ```bash
@@ -114,18 +116,18 @@ npm run dev
 - UI: http://localhost:3000
 
 画面は4つのタブで構成されています:
-- **音声処理** — 音声ファイルをアップロードして自動解析
-- **一覧** — 登録済み企業・商談履歴の一覧
+- **テキスト解析** — 文字起こし済みテキストを貼り付けて自動解析
+- **一覧** — 登録済み法人・店舗・商談履歴の一覧
 - **検索** — 優先課題をキーワード横断検索
-- **法人カルテ** — 企業別の商談履歴を集約表示
+- **法人カルテ** — 法人・店舗別の商談履歴を集約表示（法人カルテでは店舗ごとの課題有無も一覧化）
 
-本番デプロイの手順は `DEPLOYMENT.md` を参照してください（バックエンド: Fly.io、フロントエンド: GitHub Pages または Vercel、いずれも無料枠で構築可能）。GitHub Pages は静的ファイルのみ配信できるため、バックエンド（FastAPI + Whisper + SQLite）は別途サーバーが必要です。
+本番環境では Fly.io 1つだけで完結します。Docker ビルド時に Next.js を静的書き出しし、FastAPI が同一オリジンでフロントエンドとAPIの両方を配信するため、別サービス間のCORS設定は不要です。
 
 ### CLI
 
 ```bash
-# 商談音声を処理
-python -m src.main process meeting.wav --company "レストランA" --contact "山田太郎"
+# 文字起こし済みテキストを処理（transcript.txt は文字起こし済みテキストのファイル）
+python -m src.main process transcript.txt --company "レストランA" --contact "山田太郎"
 
 # 商談記録の一覧表示
 python -m src.main list-meetings
@@ -151,6 +153,7 @@ python -m src.main --help
   "meeting_id": "20240131_1400_example_restaurant",
   "company_info": {
     "name": "レストランA",
+    "corporate_name": "株式会社レストランA",
     "contact_name": "山田太郎",
     "contact_email": "yamada@example.com",
     "date": "2024-01-31T14:00:00"
@@ -181,17 +184,14 @@ python -m src.main --help
 ## セキュリティ
 
 - `ANTHROPIC_API_KEY` はサーバー側のみで使用し、フロントエンドには一切露出しません
-- CORS は許可オリジンのみ（`CORS_ORIGINS` 環境変数で設定）
-- レート制限: `/api/process` は5回/分、その他は30回/分（IPアドレス単位）
-- アップロードファイルは形式・サイズ（100MB上限）を検証
+- レート制限: `/api/process` は20回/分、その他は30回/分（IPアドレス単位）
+- 文字起こしテキストは10文字未満だと拒否されます
 
 ## トラブルシューティング
 
 **API キーエラー**: `.env` ファイルで `ANTHROPIC_API_KEY` を設定してください。
 
-**フロントエンドが API に接続できない**: `web/.env.local` の `NEXT_PUBLIC_API_URL` がバックエンドの起動アドレスと一致しているか確認してください。
-
-**音声ファイルが見つからない**: ファイルパスが正しいか、対応形式（MP3/WAV/M4A/FLAC/OGG）か確認してください。
+**フロントエンドが API に接続できない（ローカル開発時）**: `web/.env.local` の `NEXT_PUBLIC_API_URL` がバックエンドの起動アドレスと一致しているか確認してください。本番ビルドでは同一オリジン配信のため空文字列（相対パス）を使います。
 
 ## テスト
 

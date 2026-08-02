@@ -1,37 +1,27 @@
 # デプロイ手順
 
-このプロジェクトは以下の2つを別々にデプロイします。
+このプロジェクトは **Fly.io 1つだけ**でデプロイします。Docker ビルド時に Next.js フロントエンドを静的書き出しし、FastAPI がそれをAPIと同じオリジンから配信するため、フロントエンド用の別サービス（GitHub Pages / Vercel）は不要です。CORSの設定ミスによる接続エラーも発生しません。
 
-- **バックエンド（FastAPI + Whisper + SQLite）** → Fly.io（無料枠あり）
-- **フロントエンド（Next.js + HeroUI）** → **GitHub Pages**（無料・GitHub Actionsで自動デプロイ）または Vercel
-
-> **注意**: GitHub Pages は静的ファイル（HTML/CSS/JS）しか配信できません。Python サーバー・Whisper・SQLite を動かすバックエンドは GitHub Pages では動作しないため、フロントエンドだけを GitHub Pages に置き、バックエンドは Fly.io など何らかのサーバーで動かす必要があります。
+> **現在の状態**: Fly.io（GitHub 連携の Launch 機能）に既にデプロイ済みです。
+> アプリ名は `discussion-xcctgw`、公開URLは `https://discussion-xcctgw.fly.dev` です。
+> 永続ボリューム（`discussion_data`, 1GB, 東京リージョン）と `ANTHROPIC_API_KEY` シークレットも設定済みです。
 
 ---
 
-## 1. バックエンド（Fly.io）
-
-> **現在の状態**: Fly.io のダッシュボード（GitHub 連携の Launch 機能）から既にデプロイ済みです。
-> アプリ名は `discussion-xcctgw`、公開URLは `https://discussion-xcctgw.fly.dev` です。
-> 永続ボリューム（`discussion_data`, 1GB, 東京リージョン）と `ANTHROPIC_API_KEY` シークレットも設定済みです。
-> 以下は CLI から改めてデプロイする場合、または別環境に新規構築する場合の手順です。
-
-### 事前準備
+## 1. 事前準備
 
 ```bash
 curl -L https://fly.io/install.sh | sh
 flyctl auth login
 ```
 
-### 初回デプロイ
+## 2. 初回デプロイ
 
 リポジトリのルート（`discussion/`）で実行します。`fly.toml` と `Dockerfile` は既に用意済みです。
 
 ```bash
 flyctl launch --no-deploy
 # 既存の fly.toml を使うか聞かれたら "yes"
-# アプリ名は自動生成されるが、既存の discussion-xcctgw を使い続ける場合は
-# fly.toml の app 名を変更せずそのまま使う
 
 # 永続ボリューム作成（SQLite データを保持するため。既に作成済みなら不要）
 flyctl volumes create discussion_data --size 1 --region nrt
@@ -43,131 +33,44 @@ flyctl secrets set ANTHROPIC_API_KEY=sk-ant-xxxxx
 flyctl deploy
 ```
 
-デプロイ後、`https://discussion-xcctgw.fly.dev` でAPIが公開されます。
+デプロイ後、`https://discussion-xcctgw.fly.dev` でアプリ（フロントエンド + API）が公開されます。
 
-### 動作確認
+## 3. 動作確認
 
 ```bash
 curl https://discussion-xcctgw.fly.dev/api/health
 ```
 
-### CORS の許可オリジンを更新
+ブラウザで `https://discussion-xcctgw.fly.dev` を開くと、そのままWeb UIが表示されます。
 
-`fly.toml` の `CORS_ORIGINS` を実際のフロントエンドURLに変更してから再デプロイ（GitHub Pages の場合はプロジェクトページのURL、例: `https://wa-ra-so.github.io`）:
+## 4. 再デプロイ
 
-```toml
-[env]
-  CORS_ORIGINS = "https://wa-ra-so.github.io"
-```
+コードを変更したら以下だけで反映されます:
 
 ```bash
 flyctl deploy
 ```
 
----
+GitHub と連携している場合は、対象ブランチに push した後、Fly.io ダッシュボードから再デプロイを実行してください（自動デプロイが設定されていない場合）。
 
-## 2. フロントエンド（GitHub Pages — 推奨）
+### Secrets の確認
 
-`web/` を静的サイトとしてビルドし、`.github/workflows/deploy-pages.yml` で自動デプロイします。設定済みのファイルは以下の通りです:
-
-- `web/next.config.ts` — `output: "export"` で静的エクスポート。`GITHUB_PAGES=true` のときだけ `basePath`/`assetPrefix` を `/discussion`（リポジトリ名）に設定
-- `.github/workflows/deploy-pages.yml` — push 時に `web/` をビルドして GitHub Pages にデプロイ
-
-### 手順
-
-1. **リポジトリ設定を有効化**
-   GitHub リポジトリ → Settings → Pages → Source を **GitHub Actions** に設定
-
-2. **バックエンドURLを Variables に登録**
-   Settings → Secrets and variables → Actions → Variables タブ → New repository variable
-
-   ```
-   Name:  NEXT_PUBLIC_API_URL
-   Value: https://discussion-xcctgw.fly.dev
-   ```
-
-3. **作業ブランチに push（または手動実行）**
-
-   このリポジトリは現在 `claude/restaurant-discussion-sheet-k0pi2w` ブランチで開発しています。
-   `main` ブランチを作った場合はそちらへの push でも自動デプロイされます。
-
-   ```bash
-   git push origin claude/restaurant-discussion-sheet-k0pi2w
-   ```
-
-   もしくは Actions タブから `Deploy Frontend to GitHub Pages` を `workflow_dispatch` で手動実行。
-
-4. **公開URLを確認**
-
-   `https://wa-ra-so.github.io/discussion/` でアクセスできます（リポジトリ名が `discussion` でない場合は `web/next.config.ts` の `repoName` を実際のリポジトリ名に合わせてください）。
-
-### ローカルで GitHub Pages 相当のビルドを試す
-
-```bash
-cd web
-GITHUB_PAGES=true NEXT_PUBLIC_API_URL=https://discussion-xcctgw.fly.dev npm run build
-# web/out/ に静的ファイルが生成される
-npx serve out  # or any static file server
-```
+Fly.io の Secrets（`fly secrets list` またはダッシュボードの Secrets タブ）に、`fly.toml` の `[env]` と重複するキーが残っていないか確認してください。Secrets は `[env]` より優先されるため、古い値が残っていると意図しない設定で動いてしまいます。この構成では `CORS_ORIGINS` の Secret は不要です（同一オリジン配信のため）。
 
 ---
 
-## 2b. フロントエンド（Vercel — 代替案）
-
-GitHub Pages の代わりに Vercel を使うことも可能です（`web/vercel.json` を用意済み）。
-
-`web/` ディレクトリが Next.js プロジェクトです。
-
-### Vercel CLI でのデプロイ
-
-```bash
-cd web
-npm install -g vercel
-vercel login
-vercel
-```
-
-質問には以下のように答えます:
-- Set up and deploy: `Y`
-- Link to existing project: プロジェクトによる
-- Root directory: そのまま（`web/` 内で実行しているため）
-
-### 環境変数を設定
-
-Vercel ダッシュボード → Project Settings → Environment Variables:
-
-```
-NEXT_PUBLIC_API_URL = https://discussion-xcctgw.fly.dev
-```
-
-設定後、再デプロイ:
-
-```bash
-vercel --prod
-```
-
-### GitHub 連携でのデプロイ（推奨）
-
-1. https://vercel.com/new でリポジトリをインポート
-2. **Root Directory** を `web` に設定（重要 — モノレポ構成のため）
-3. 環境変数 `NEXT_PUBLIC_API_URL` を設定
-4. Deploy をクリック
-
-以降、`main`（または対象ブランチ）への push で自動デプロイされます。
-
----
-
-## 3. セキュリティチェックリスト
+## 5. セキュリティチェックリスト
 
 - [x] `ANTHROPIC_API_KEY` はサーバー側のシークレットのみに保存（フロントエンドに一切露出しない）
-- [x] CORS は許可したオリジンのみ（本番URLに更新すること）
-- [x] レート制限実装済み（`/api/process`: 5回/分、その他: 30回/分、IPアドレス単位）
-- [x] アップロードファイルの形式・サイズ検証（100MB上限）
-- [x] Fly.io / Vercel いずれも自動的に HTTPS を提供
+- [x] レート制限実装済み（`/api/process`: 20回/分、その他: 30回/分、IPアドレス単位）
+- [x] 文字起こしテキストは10文字未満だと拒否
+- [x] Fly.io が自動的に HTTPS を提供
 
 ---
 
-## 4. ローカル動作確認（デプロイ前の確認用）
+## 6. ローカル動作確認（デプロイ前の確認用）
+
+**個別に起動する場合（開発しやすい）:**
 
 ```bash
 # ターミナル1: バックエンド
@@ -186,14 +89,24 @@ npm run dev
 
 http://localhost:3000 をブラウザで開いて動作確認してください。
 
+**本番と同じ構成（同一オリジン配信）を試す場合:**
+
+```bash
+cd discussion/web
+NEXT_PUBLIC_API_URL="" npm run build   # web/out/ に静的ファイルが生成される
+cd ..
+WEB_DIST_DIR=web/web/out python -m uvicorn src.api.main:app --port 8000
+```
+
+http://localhost:8000 を開くと、フロントエンドとAPIが同じポートから配信されます。
+
 ---
 
-## 5. コスト試算
+## 7. コスト試算
 
 | 項目 | 月額 |
 |---|---|
-| Vercel（フロントエンド、Hobbyプラン） | $0 |
-| Fly.io（バックエンド、shared-cpu-1x 2GB） | 無料枠内（$0〜数ドル） |
+| Fly.io（shared-cpu-1x 1GB、Whisper非搭載のため軽量） | 無料枠内（$0〜数ドル） |
 | Anthropic API（Claude、従量課金） | 使用量に応じる |
 
-Whisper はサーバー内でモデルをロードして実行するため追加のAPI費用は発生しません（計算リソースのみ）。
+音声認識（Whisper）を行わなくなったため、Docker イメージが大幅に軽量化され、コールドスタートも高速になっています。

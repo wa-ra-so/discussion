@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 from schema.models import DiscussionRecord
-from src.core.audio_processor import AudioProcessor
 from src.core.text_analyzer import TextAnalyzer
 from src.config import settings
 from src.utils.logger import get_logger
@@ -12,18 +11,15 @@ logger = get_logger(__name__)
 
 
 class DiscussionPipeline:
-    """音声ファイル → JSON レコードへのエンドツーエンドパイプライン"""
+    """文字起こし済みテキスト → JSON レコードへのエンドツーエンドパイプライン"""
 
     def __init__(self):
         """初期化"""
-        self.audio_processor = AudioProcessor(
-            model_size=settings.whisper_model
-        )
         self.text_analyzer = TextAnalyzer()
 
-    def process_audio_file(
+    def process_transcript(
         self,
-        audio_file: Path,
+        transcript_text: str,
         company_name: str,
         corporate_name: Optional[str] = None,
         contact_name: Optional[str] = None,
@@ -31,10 +27,10 @@ class DiscussionPipeline:
         notes: Optional[str] = None,
     ) -> DiscussionRecord:
         """
-        音声ファイルを処理してディスカッション記録を生成
+        文字起こし済みテキストを解析してディスカッション記録を生成
 
         Args:
-            audio_file: 音声ファイルパス
+            transcript_text: 商談の文字起こしテキスト（既に文字起こし済みのもの）
             company_name: 店舗名
             corporate_name: 法人名（任意）
             contact_name: 接触者氏名
@@ -44,34 +40,21 @@ class DiscussionPipeline:
         Returns:
             DiscussionRecord: 構造化されたディスカッション記録
         """
-        logger.info(f"Starting pipeline: {audio_file}")
+        logger.info(f"Starting pipeline for: {company_name}")
 
         try:
-            # Step 1: 音声ファイルを文字起こし
-            logger.info("Step 1/3: Transcribing audio...")
-            transcription_result = self.audio_processor.transcribe(
-                audio_file, language="ja"
-            )
-            transcription_text = transcription_result["text"]
-            logger.info(
-                f"Transcription complete: {len(transcription_text)} characters"
-            )
-
-            # Step 2: テキストを解析
-            logger.info("Step 2/3: Analyzing discussion content...")
             record = self.text_analyzer.analyze(
-                transcription=transcription_text,
+                transcription=transcript_text,
                 company_name=company_name,
                 corporate_name=corporate_name,
                 contact_name=contact_name,
                 meeting_date=meeting_date,
             )
 
-            # Step 3: メモを追加
             if notes:
                 record.notes = notes
 
-            logger.info("Step 3/3: Pipeline complete")
+            logger.info("Pipeline complete")
             return record
 
         except Exception as e:
@@ -109,7 +92,7 @@ class DiscussionPipeline:
 
     def process_and_save(
         self,
-        audio_file: Path,
+        transcript_text: str,
         company_name: str,
         corporate_name: Optional[str] = None,
         contact_name: Optional[str] = None,
@@ -118,13 +101,13 @@ class DiscussionPipeline:
         output_dir: Optional[Path] = None,
     ) -> tuple[DiscussionRecord, Path]:
         """
-        音声ファイルを処理して記録を保存（一括処理）
+        文字起こし済みテキストを処理して記録を保存（一括処理）
 
         Returns:
             (DiscussionRecord, 保存ファイルパス) のタプル
         """
-        record = self.process_audio_file(
-            audio_file=audio_file,
+        record = self.process_transcript(
+            transcript_text=transcript_text,
             company_name=company_name,
             corporate_name=corporate_name,
             contact_name=contact_name,
