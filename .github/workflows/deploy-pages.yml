@@ -2,7 +2,7 @@ name: Deploy Frontend to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/restaurant-discussion-sheet-k0pi2w]
     paths:
       - "web/**"
       - ".github/workflows/deploy-pages.yml"

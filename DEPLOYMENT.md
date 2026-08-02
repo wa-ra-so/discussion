@@ -11,6 +11,11 @@
 
 ## 1. バックエンド（Fly.io）
 
+> **現在の状態**: Fly.io のダッシュボード（GitHub 連携の Launch 機能）から既にデプロイ済みです。
+> アプリ名は `discussion-xcctgw`、公開URLは `https://discussion-xcctgw.fly.dev` です。
+> 永続ボリューム（`discussion_data`, 1GB, 東京リージョン）と `ANTHROPIC_API_KEY` シークレットも設定済みです。
+> 以下は CLI から改めてデプロイする場合、または別環境に新規構築する場合の手順です。
+
 ### 事前準備
 
 ```bash
@@ -23,10 +28,12 @@ flyctl auth login
 リポジトリのルート（`discussion/`）で実行します。`fly.toml` と `Dockerfile` は既に用意済みです。
 
 ```bash
-flyctl launch --name discussion-api --no-deploy
+flyctl launch --no-deploy
 # 既存の fly.toml を使うか聞かれたら "yes"
+# アプリ名は自動生成されるが、既存の discussion-xcctgw を使い続ける場合は
+# fly.toml の app 名を変更せずそのまま使う
 
-# 永続ボリューム作成（SQLite データを保持するため）
+# 永続ボリューム作成（SQLite データを保持するため。既に作成済みなら不要）
 flyctl volumes create discussion_data --size 1 --region nrt
 
 # APIキーをシークレットとして設定（.env の値は絶対にコミットしない）
@@ -36,12 +43,12 @@ flyctl secrets set ANTHROPIC_API_KEY=sk-ant-xxxxx
 flyctl deploy
 ```
 
-デプロイ後、`https://discussion-api.fly.dev` でAPIが公開されます。
+デプロイ後、`https://discussion-xcctgw.fly.dev` でAPIが公開されます。
 
 ### 動作確認
 
 ```bash
-curl https://discussion-api.fly.dev/api/health
+curl https://discussion-xcctgw.fly.dev/api/health
 ```
 
 ### CORS の許可オリジンを更新
@@ -76,13 +83,16 @@ flyctl deploy
 
    ```
    Name:  NEXT_PUBLIC_API_URL
-   Value: https://discussion-api.fly.dev
+   Value: https://discussion-xcctgw.fly.dev
    ```
 
-3. **`main` ブランチに push（または手動実行）**
+3. **作業ブランチに push（または手動実行）**
+
+   このリポジトリは現在 `claude/restaurant-discussion-sheet-k0pi2w` ブランチで開発しています。
+   `main` ブランチを作った場合はそちらへの push でも自動デプロイされます。
 
    ```bash
-   git push origin main
+   git push origin claude/restaurant-discussion-sheet-k0pi2w
    ```
 
    もしくは Actions タブから `Deploy Frontend to GitHub Pages` を `workflow_dispatch` で手動実行。
@@ -95,7 +105,7 @@ flyctl deploy
 
 ```bash
 cd web
-GITHUB_PAGES=true NEXT_PUBLIC_API_URL=https://discussion-api.fly.dev npm run build
+GITHUB_PAGES=true NEXT_PUBLIC_API_URL=https://discussion-xcctgw.fly.dev npm run build
 # web/out/ に静的ファイルが生成される
 npx serve out  # or any static file server
 ```
@@ -127,7 +137,7 @@ vercel
 Vercel ダッシュボード → Project Settings → Environment Variables:
 
 ```
-NEXT_PUBLIC_API_URL = https://discussion-api.fly.dev
+NEXT_PUBLIC_API_URL = https://discussion-xcctgw.fly.dev
 ```
 
 設定後、再デプロイ:
