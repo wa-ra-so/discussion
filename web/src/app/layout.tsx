@@ -18,7 +18,7 @@ const notoSansJP = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: "商談解析システム | 食べログ営業支援",
-  description: "商談テキストを自動解析し、法人カルテとして蓄積する営業支援システム",
+  description: "商談テキストまたは録音を自動解析し、法人カルテとして蓄積する営業支援システム",
 };
 
 export default function RootLayout({
