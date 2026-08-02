@@ -7,6 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+# openai-whisper の setup.py が pkg_resources に依存しており、
+# 新しい setuptools（pkg_resources を含まない）だとビルドに失敗するため、
+# ビルド用の隔離環境にも適用される制約ファイルで setuptools を固定する。
+RUN echo "setuptools<81" > /tmp/constraints.txt
+ENV PIP_CONSTRAINT=/tmp/constraints.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY schema/ ./schema/
