@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --bg: #f7f7f8;
+      --surface: #ffffff;
+      --border: #e4e4e7;
+      --text: #18181b;
+      --text-muted: #71717a;
+      --accent: #2563eb;
+      --accent-fg: #ffffff;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --success: #16a34a;
+      --success-bg: #f0fdf4;
+      --radius: 12px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0b0d;
+        --surface: #18181b;
+        --border: #2b2b30;
+        --text: #f4f4f5;
+        --text-muted: #a1a1aa;
+        --accent: #3b82f6;
+        --accent-fg: #ffffff;
+        --danger: #f87171;
+        --danger-bg: #2a1414;
+        --success: #4ade80;
+        --success-bg: #10230f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
+    header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    header .logo {
+      width: 40px; height: 40px; border-radius: 10px; background: var(--accent);
+      color: var(--accent-fg); display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 18px; flex-shrink: 0;
+    }
+    header h1 { font-size: 20px; margin: 0; }
+    header p { font-size: 13px; color: var(--text-muted); margin: 2px 0 0; }
+
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+    .tab-btn {
+      appearance: none; border: none; background: none; cursor: pointer;
+      padding: 10px 14px; font-size: 14px; color: var(--text-muted);
+      border-bottom: 2px solid transparent; white-space: nowrap;
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+    .panel { display: none; }
+    .panel.active { display: block; animation: fadein .15s ease; }
+    @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px; margin-bottom: 16px;
+    }
+    .card h2 { font-size: 16px; margin: 0 0 4px; }
+    .card .desc { font-size: 13px; color: var(--text-muted); margin: 0 0 14px; }
+
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+    input[type=text], input[type=datetime-local], textarea, select {
+      width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit;
+    }
+    textarea { resize: vertical; }
+    .field { margin-bottom: 14px; }
+    .grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 560px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+
+    button.primary {
+      appearance: none; border: none; background: var(--accent); color: var(--accent-fg);
+      padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    button.primary:disabled { opacity: .5; cursor: default; }
+    button.ghost {
+      appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    }
+    button.ghost.active { border-color: var(--accent); color: var(--accent); }
+
+    .alert { padding: 12px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
+    .alert.danger { background: var(--danger-bg); color: var(--danger); }
+    .alert.success { background: var(--success-bg); color: var(--success); }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px;
+      font-size: 12px; background: var(--bg); border: 1px solid var(--border);
+    }
+    .chip.danger { background: var(--danger-bg); color: var(--danger); border-color: transparent; }
+    .chip.success { background: var(--success-bg); color: var(--success); border-color: transparent; }
+
+    .list-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      padding: 11px 4px; border-bottom: 1px solid var(--border); cursor: pointer;
+    }
+    .list-row:last-child { border-bottom: none; }
+    .list-row:hover { background: var(--bg); }
+    .list-row .name { font-weight: 600; font-size: 14px; }
+    .list-row .meta { font-size: 12px; color: var(--text-muted); }
+
+    .issue-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 0; }
+    .priority-dots span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; background: var(--border); }
+    .priority-dots span.filled { background: var(--danger); }
+
+    .muted { color: var(--text-muted); font-size: 13px; }
+    .section-title { font-size: 13px; font-weight: 700; color: var(--text-muted); margin: 18px 0 6px; text-transform: uppercase; letter-spacing: .03em; }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff;
+      border-radius: 50%; display: inline-block; animation: spin .6s linear infinite; margin-right: 6px; vertical-align: -2px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .breadcrumb { font-size: 13px; color: var(--accent); cursor: pointer; margin-bottom: 10px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">談</div>
+      <div>
+        <h1>商談解析システム</h1>
+        <p>食べログ営業向け ― 文字起こし済みテキストを解析し、法人カルテとして蓄積します</p>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="process">テキスト解析</button>
+      <button class="tab-btn" data-tab="list">一覧</button>
+      <button class="tab-btn" data-tab="search">検索</button>
+      <button class="tab-btn" data-tab="card">法人カルテ</button>
+    </div>
+
+    <!-- ============ 解析パネル ============ -->
+    <section class="panel active" id="panel-process">
+      <div class="card">
+        <h2>商談テキストを解析</h2>
+        <p class="desc">文字起こし済みの商談テキストを貼り付けると、Gemini が自動でディスカッション項目を抽出します</p>
+
+        <div class="field">
+          <label>文字起こしテキスト</label>
+          <textarea id="p-transcript" rows="9" placeholder="商談の文字起こしテキストをここに貼り付けてください"></textarea>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label>店舗名 <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="p-company" placeholder="レストランA 渋谷店">
+          </div>
+          <div class="field">
+            <label>法人名（複数店舗経営の場合のみ）</label>
+            <input type="text" id="p-corporate" placeholder="株式会社レストランA">
+          </div>
+          <div class="field">
+            <label>接触者氏名</label>
+            <input type="text" id="p-contact" placeholder="山田太郎">
+          </div>
+          <div class="field">
+            <label>商談日時</label>
+            <input type="datetime-local" id="p-date">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>補足メモ</label>
+          <textarea id="p-notes" rows="3" placeholder="商談の背景や特記事項があれば記入してください"></textarea>
+        </div>
+
+        <div id="p-error"></div>
+
+        <button class="primary" id="p-submit" onclick="submitProcess()">解析を開始</button>
+      </div>
+
+      <div class="card" id="p-result" style="display:none;"></div>
+    </section>
+
+    <!-- ============ 一覧パネル ============ -->
+    <section class="panel" id="panel-list">
+      <div class="card" id="list-root">
+        <div class="muted">読み込み中...</div>
+      </div>
+    </section>
+
+    <!-- ============ 検索パネル ============ -->
+    <section class="panel" id="panel-search">
+      <div class="card">
+        <h2>課題を検索</h2>
+        <div class="field" style="display:flex; gap:8px; margin-top:12px;">
+          <input type="text" id="s-query" placeholder="キーワード（例: 人手不足）" onkeydown="if(event.key==='Enter') runSearch()">
+          <button class="primary" onclick="runSearch()">検索</button>
+        </div>
+        <div id="s-results"></div>
+      </div>
+    </section>
+
+    <!-- ============ 法人カルテパネル ============ -->
+    <section class="panel" id="panel-card">
+      <div class="card">
+        <h2>法人カルテ</h2>
+        <div style="display:flex; gap:8px; margin: 10px 0 14px;">
+          <button class="ghost active" id="c-mode-store" onclick="setCardMode('store')">店舗で見る</button>
+          <button class="ghost" id="c-mode-corp" onclick="setCardMode('corporate')">法人で見る</button>
+        </div>
+        <div class="field" style="display:flex; gap:8px;">
+          <input type="text" id="c-name" placeholder="店舗名または法人名を入力" onkeydown="if(event.key==='Enter') loadCard()">
+          <button class="primary" onclick="loadCard()">表示</button>
+        </div>
+        <div id="c-result"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ---------- タブ切り替え ----------
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { switchTab(btn.dataset.tab); });
+    });
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === tab); });
+      document.querySelectorAll('.panel').forEach(function (p) { p.classList.toggle('active', p.id === 'panel-' + tab); });
+      if (tab === 'list') loadListRoot();
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function fmtDate(d) {
+      if (!d) return '';
+      var date = new Date(d);
+      if (isNaN(date.getTime())) return String(d);
+      return date.toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    function priorityDots(value) {
+      if (!value) return '';
+      var html = '<span class="priority-dots">';
+      for (var i = 1; i <= 5; i++) html += '<span class="' + (i <= value ? 'filled' : '') + '"></span>';
+      return html + '</span>';
+    }
+    var CATEGORY_LABELS = {
+      marketing: '集客', reservation_efficiency: '予約・効率', cost_reduction: 'コスト削減',
+      recruitment: '採用', inbound: 'インバウンド'
+    };
+    function categoryLabel(c) { return CATEGORY_LABELS[c] || c; }
+
+    // ---------- テキスト解析 ----------
+    function submitProcess() {
+      var transcript = document.getElementById('p-transcript').value.trim();
+      var company = document.getElementById('p-company').value.trim();
+      var errorBox = document.getElementById('p-error');
+      errorBox.innerHTML = '';
+
+      if (transcript.length < 10 || !company) {
+        errorBox.innerHTML = '<div class="alert danger">文字起こしテキスト（10文字以上）と店舗名は必須です</div>';
+        return;
+      }
+
+      var btn = document.getElementById('p-submit');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>解析中...';
+      document.getElementById('p-result').style.display = 'none';
+
+      google.script.run
+        .withSuccessHandler(function (record) {
+          btn.disabled = false;
+          btn.textContent = '解析を開始';
+          document.getElementById('p-transcript').value = '';
+          renderProcessResult(record);
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false;
+          btn.textContent = '解析を開始';
+          errorBox.innerHTML = '<div class="alert danger">' + escapeHtml(err.message || String(err)) + '</div>';
+        })
+        .analyzeTranscript({
+          transcript: transcript,
+          companyName: company,
+          corporateName: document.getElementById('p-corporate').value.trim(),
+          contactName: document.getElementById('p-contact').value.trim(),
+          meetingDate: document.getElementById('p-date').value,
+          notes: document.getElementById('p-notes').value.trim(),
+        });
+    }
+
+    function renderProcessResult(record) {
+      var box = document.getElementById('p-result');
+      var issuesHtml = (record.priority_issues || []).map(function (issue) {
+        return '<div class="issue-row"><span class="chip">' + escapeHtml(categoryLabel(issue.category)) + '</span>' +
+          '<span>' + escapeHtml(issue.issue) + '</span>' + priorityDots(issue.priority) + '</div>';
+      }).join('');
+
+      box.innerHTML =
+        '<h2>✅ 解析完了</h2>' +
+        '<p class="desc">Meeting ID: ' + escapeHtml(record.meeting_id) + '</p>' +
+        '<div style="display:flex; flex-wrap:wrap; gap:20px; font-size:13px; margin-bottom:14px;">' +
+        '<div><div class="muted">店舗名</div><div style="font-weight:600">' + escapeHtml(record.company_name) + '</div></div>' +
+        (record.corporate_name ? '<div><div class="muted">法人名</div><div style="font-weight:600">' + escapeHtml(record.corporate_name) + '</div></div>' : '') +
+        '<div><div class="muted">接触者</div><div style="font-weight:600">' + escapeHtml(record.contact_name || '不明') + '</div></div>' +
+        '<div><div class="muted">信頼度</div><div style="font-weight:600">' + Math.round((record.confidence_score || 0) * 100) + '%</div></div>' +
+        '</div>' +
+        (record.summary ? '<div class="section-title">要約</div><p style="font-size:13px;">' + escapeHtml(record.summary) + '</p>' : '') +
+        (issuesHtml ? '<div class="section-title">優先課題</div>' + issuesHtml : '');
+      box.style.display = 'block';
+    }
+
+    // ---------- 一覧 ----------
+    function loadListRoot() {
+      var box = document.getElementById('list-root');
+      box.innerHTML = '<div class="muted">読み込み中...</div>';
+      google.script.run
+        .withSuccessHandler(function (data) {
+          var html = '';
+          html += '<h2>法人</h2>';
+          if (!data.corporations || data.corporations.length === 0) {
+            html += '<p class="muted">登録された法人はまだありません</p>';
+          } else {
+            html += data.corporations.map(function (c) {
+              return '<div class="list-row" onclick="openCorporate(\'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')">' +
+                '<div><div class="name">' + escapeHtml(c.name) + '</div><div class="meta">' + c.store_count + '店舗 ・ ' + c.meeting_count + '件</div></div>' +
+                '<div class="meta">' + fmtDate(c.last_meeting) + '</div></div>';
+            }).join('');
+          }
+          html += '<h2 style="margin-top:22px;">店舗</h2>';
+          if (!data.companies || data.companies.length === 0) {
+            html += '<p class="muted">登録された店舗はまだありません</p>';
+          } else {
+            html += data.companies.map(function (c) {
+              return '<div class="list-row" onclick="openCompany(\'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')">' +
+                '<div><div class="name">' + escapeHtml(c.name) + '</div><div class="meta">' + (c.corporate_name ? escapeHtml(c.corporate_name) + ' ・ ' : '') + c.meeting_count + '件</div></div>' +
+                '<div class="meta">' + fmtDate(c.last_meeting) + '</div></div>';
+            }).join('');
+          }
+          box.innerHTML = html;
+        })
+        .withFailureHandler(function (err) { box.innerHTML = '<div class="alert danger">' + escapeHtml(err.message || String(err)) + '</div>'; })
+        .listMeetings({});
+    }
+    function openCorporate(name) {
+      switchTab('card');
+      setCardMode('corporate');
+      document.getElementById('c-name').value = name;
+      loadCard();
+    }
+    function openCompany(name) {
+      switchTab('card');
+      setCardMode('store');
+      document.getElementById('c-name').value = name;
+      loadCard();
+    }
+
+    // ---------- 検索 ----------
+    function runSearch() {
+      var query = document.getElementById('s-query').value.trim();
+      var box = document.getElementById('s-results');
+      if (query.length < 2) { box.innerHTML = '<div class="alert danger">2文字以上入力してください</div>'; return; }
+      box.innerHTML = '<div class="muted" style="margin-top:12px;">検索中...</div>';
+      google.script.run
+        .withSuccessHandler(function (results) {
+          if (!results || results.length === 0) { box.innerHTML = '<p class="muted" style="margin-top:12px;">該当する課題は見つかりませんでした</p>'; return; }
+          box.innerHTML = '<div style="margin-top:12px;">' + results.map(function (r) {
+            return '<div class="list-row" style="cursor:default;"><div>' +
+              '<span class="chip">' + escapeHtml(categoryLabel(r.category)) + '</span> ' +
+              '<span style="font-weight:600;">' + escapeHtml(r.company_name) + (r.corporate_name ? ' (' + escapeHtml(r.corporate_name) + ')' : '') + '</span>' +
+              '<div class="meta" style="margin-top:3px;">' + escapeHtml(r.issue) + '</div></div>' + priorityDots(r.priority) + '</div>';
+          }).join('') + '</div>';
+        })
+        .withFailureHandler(function (err) { box.innerHTML = '<div class="alert danger">' + escapeHtml(err.message || String(err)) + '</div>'; })
+        .searchIssues(query);
+    }
+
+    // ---------- 法人カルテ ----------
+    var cardMode = 'store';
+    function setCardMode(mode) {
+      cardMode = mode;
+      document.getElementById('c-mode-store').classList.toggle('active', mode === 'store');
+      document.getElementById('c-mode-corp').classList.toggle('active', mode === 'corporate');
+      document.getElementById('c-name').placeholder = mode === 'store' ? '店舗名を入力' : '法人名を入力';
+    }
+    function loadCard() {
+      var name = document.getElementById('c-name').value.trim();
+      var box = document.getElementById('c-result');
+      if (!name) return;
+      box.innerHTML = '<div class="muted" style="margin-top:12px;">読み込み中...</div>';
+
+      if (cardMode === 'corporate') {
+        google.script.run
+          .withSuccessHandler(function (card) {
+            if (!card) { box.innerHTML = '<p class="muted" style="margin-top:12px;">該当する法人が見つかりませんでした</p>'; return; }
+            renderCorporateCard(card);
+          })
+          .withFailureHandler(function (err) { box.innerHTML = '<div class="alert danger">' + escapeHtml(err.message || String(err)) + '</div>'; })
+          .getCorporateCard(name);
+      } else {
+        google.script.run
+          .withSuccessHandler(function (card) {
+            if (!card) { box.innerHTML = '<p class="muted" style="margin-top:12px;">該当する店舗が見つかりませんでした</p>'; return; }
+            renderStoreCard(card);
+          })
+          .withFailureHandler(function (err) { box.innerHTML = '<div class="alert danger">' + escapeHtml(err.message || String(err)) + '</div>'; })
+          .getCompanyCard(name);
+      }
+    }
+    function renderCorporateCard(card) {
+      var box = document.getElementById('c-result');
+      var html = '<div class="section-title" style="margin-top:18px;">' + escapeHtml(card.corporate_name) + ' ・ 店舗一覧</div>';
+      html += card.stores.map(function (s) {
+        var badge = s.has_issues
+          ? '<span class="chip danger">課題あり (' + s.issue_count + ')</span>'
+          : '<span class="chip success">課題なし</span>';
+        return '<div class="list-row" onclick="openCompany(\'' + escapeHtml(s.company_name).replace(/'/g, "\\'") + '\')">' +
+          '<div><div class="name">' + escapeHtml(s.company_name) + '</div>' +
+          '<div class="meta">' + s.meeting_count + '件 ・ ' + fmtDate(s.last_meeting) + (s.top_issue ? ' ・ ' + escapeHtml(s.top_issue) : '') + '</div></div>' +
+          badge + '</div>';
+      }).join('');
+      box.innerHTML = html;
+    }
+    function renderStoreCard(card) {
+      var box = document.getElementById('c-result');
+      var latest = card.latest_record;
+      var html = '<div class="section-title" style="margin-top:18px;">' + escapeHtml(card.company_name) +
+        (card.corporate_name ? ' <span class="muted">(' + escapeHtml(card.corporate_name) + ')</span>' : '') + '</div>';
+      html += '<p class="muted">商談回数: ' + card.total_meetings + '件 ・ 最新: ' + fmtDate(latest.meeting_date) + '</p>';
+
+      if (latest.summary) html += '<div class="section-title">最新の要約</div><p style="font-size:13px;">' + escapeHtml(latest.summary) + '</p>';
+
+      if (latest.priority_issues && latest.priority_issues.length) {
+        html += '<div class="section-title">最新の優先課題</div>';
+        html += latest.priority_issues.map(function (issue) {
+          return '<div class="issue-row"><span class="chip">' + escapeHtml(categoryLabel(issue.category)) + '</span>' +
+            '<span>' + escapeHtml(issue.issue) + '</span>' + priorityDots(issue.priority) + '</div>';
+        }).join('');
+      }
+
+      html += '<div class="section-title">商談履歴</div>';
+      html += card.all_records.map(function (r) {
+        return '<div class="list-row" style="cursor:default;"><div><div class="name">' + fmtDate(r.meeting_date) + '</div>' +
+          '<div class="meta">' + escapeHtml(r.summary || '') + '</div></div></div>';
+      }).join('');
+
+      box.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
