@@ -1,10 +1,14 @@
-from fastapi import FastAPI, HTTPException, Form, Request
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import os
+import tempfile
+import uuid
 from datetime import datetime
 from typing import Optional
+
+from schema.models import DiscussionRecord
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -40,6 +44,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _record_to_dict(record: DiscussionRecord) -> dict:
+    """DiscussionRecord をAPIレスポンス用の辞書に変換する（テキスト・音声共通）"""
+    return {
+        "success": True,
+        "meeting_id": record.meeting_id,
+        "company_name": record.company_info.name,
+        "corporate_name": record.company_info.corporate_name,
+        "contact_name": record.company_info.contact_name,
+        "confidence_score": record.confidence_score,
+        "summary": record.summary,
+        "priority_issues": [
+            {
+                "category": issue.category.value,
+                "issue": issue.issue,
+                "priority": issue.priority,
+            }
+            for issue in record.priority_issues
+        ],
+        "dx_solutions": record.dx_solutions.model_dump(),
+        "created_at": record.created_at.isoformat(),
+    }
 
 
 # ============================================================================
@@ -99,29 +126,155 @@ async def process_transcript(
         except Exception as e:
             logger.warning(f"Failed to save to DB: {e}")
 
-        return {
-            "success": True,
-            "meeting_id": record.meeting_id,
-            "company_name": record.company_info.name,
-            "corporate_name": record.company_info.corporate_name,
-            "contact_name": record.company_info.contact_name,
-            "confidence_score": record.confidence_score,
-            "summary": record.summary,
-            "priority_issues": [
-                {
-                    "category": issue.category.value,
-                    "issue": issue.issue,
-                    "priority": issue.priority,
-                }
-                for issue in record.priority_issues
-            ],
-            "dx_solutions": record.dx_solutions.model_dump(),
-            "created_at": record.created_at.isoformat(),
-        }
+        return _record_to_dict(record)
 
     except Exception as e:
         logger.error(f"Transcript analysis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# PROCESS-AUDIO ENDPOINT - 録音ファイルの処理（非同期ジョブ方式）
+# ============================================================================
+def _run_audio_processing_job(
+    job_id: str,
+    tmp_path: Path,
+    company_name: str,
+    corporate_name: Optional[str],
+    contact_name: Optional[str],
+    meeting_date: Optional[str],
+    notes: Optional[str],
+) -> None:
+    """
+    バックグラウンドスレッドで実行される音声処理本体。
+    Whisper文字起こし + Claude解析は同期・ブロッキングだが、Starlette の
+    BackgroundTasks は同期関数をスレッドプールで実行するため、
+    イベントループ（＝他のリクエスト、特にステータス確認のポーリング）を
+    ブロックしない。
+    """
+    db = get_db_manager()
+    try:
+        pipeline = get_pipeline()
+        record, _ = pipeline.process_and_save(
+            audio_file=tmp_path,
+            company_name=company_name,
+            corporate_name=corporate_name,
+            contact_name=contact_name,
+            meeting_date=meeting_date,
+            notes=notes,
+        )
+
+        try:
+            record_id = db.save_record(record)
+            logger.info(f"Record saved to DB: {record_id}")
+        except Exception as e:
+            logger.warning(f"Failed to save to DB: {e}")
+
+        db.update_job(job_id, status="completed", result=_record_to_dict(record))
+        logger.info(f"Job {job_id} completed")
+
+    except Exception as e:
+        logger.error(f"Job {job_id} failed: {e}")
+        db.update_job(job_id, status="failed", error_message=str(e))
+
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+@app.post("/api/process-audio")
+@limiter.limit("5/minute")
+async def process_audio(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    company_name: str = Form(...),
+    corporate_name: Optional[str] = Form(None),
+    contact_name: Optional[str] = Form(None),
+    meeting_date: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+) -> dict:
+    """
+    録音ファイルの処理を受け付け、バックグラウンドジョブとして開始する。
+
+    Whisper文字起こし + Claude解析には数十秒〜数分かかるため、リクエストを
+    ブロックせず即座に job_id を返す。進捗は GET /api/process-audio/status/{job_id}
+    でポーリングして確認する。
+
+    Args:
+        file: 音声ファイル (MP3/WAV/M4A/FLAC/OGG)
+        company_name: 店舗名
+        corporate_name: 法人名（任意。単一店舗経営の場合は不要）
+        contact_name: 接触者氏名
+        meeting_date: 商談日時
+        notes: 補足メモ
+
+    Returns:
+        {job_id, status: "pending"}
+    """
+    supported_formats = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
+    file_ext = Path(file.filename).suffix.lower()
+
+    if file_ext not in supported_formats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format: {file_ext}",
+        )
+
+    if file.size and file.size > 100 * 1024 * 1024:  # 100MB制限
+        raise HTTPException(
+            status_code=413,
+            detail="File size exceeds 100MB limit",
+        )
+
+    logger.info(f"Accepting audio for processing: {file.filename} for {company_name}")
+
+    with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as tmp_file:
+        content = await file.read()
+        tmp_file.write(content)
+        tmp_path = Path(tmp_file.name)
+
+    job_id = str(uuid.uuid4())
+    db = get_db_manager()
+    db.create_job(job_id, company_name=company_name, corporate_name=corporate_name)
+
+    background_tasks.add_task(
+        _run_audio_processing_job,
+        job_id,
+        tmp_path,
+        company_name,
+        corporate_name,
+        contact_name,
+        meeting_date,
+        notes,
+    )
+
+    return {"success": True, "job_id": job_id, "status": "pending"}
+
+
+@app.get("/api/process-audio/status/{job_id}")
+@limiter.limit("120/minute")
+async def get_process_audio_status(request: Request, job_id: str) -> dict:
+    """
+    音声処理ジョブの状態をポーリングで確認する。
+
+    Returns:
+        status: pending | completed | failed
+        result: 完了時のみ、処理結果（/api/process と同じ形）
+        error: 失敗時のみ、エラーメッセージ
+    """
+    db = get_db_manager()
+    job = db.get_job(job_id)
+
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    return {
+        "success": True,
+        "job_id": job_id,
+        "status": job["status"],
+        "result": job["result"],
+        "error": job["error_message"],
+    }
 
 
 # ============================================================================

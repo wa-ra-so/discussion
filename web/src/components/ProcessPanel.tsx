@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@heroui/react";
 import { Button } from "@heroui/react";
 import { TextField } from "@heroui/react";
@@ -9,27 +9,73 @@ import { Input } from "@heroui/react";
 import { TextArea } from "@heroui/react";
 import { Alert } from "@heroui/react";
 import { Chip } from "@heroui/react";
+import { ProgressBar } from "@heroui/react";
 import { Spinner } from "@heroui/react";
-import { CheckCircle2, XCircle, FileText } from "lucide-react";
-import { ApiRequestError, analyzeTranscript } from "@/lib/api";
+import { CheckCircle2, XCircle, FileText, UploadCloud, FileAudio } from "lucide-react";
+import {
+  ApiRequestError,
+  analyzeTranscript,
+  getProcessAudioStatus,
+  processAudio,
+} from "@/lib/api";
 import { categoryLabel } from "@/lib/constants";
 import { PriorityIndicator } from "@/components/PriorityIndicator";
 import type { ProcessResult } from "@/lib/types";
 
 const MIN_TRANSCRIPT_LENGTH = 10;
+const SUPPORTED_EXTENSIONS = [".mp3", ".wav", ".m4a", ".flac", ".ogg"];
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const POLL_INTERVAL_MS = 3000;
+
+type InputMode = "text" | "audio";
 
 export function ProcessPanel() {
-  const [transcript, setTranscript] = useState("");
+  const [mode, setMode] = useState<InputMode>("text");
+
+  // 共通フィールド
   const [companyName, setCompanyName] = useState("");
   const [corporateName, setCorporateName] = useState("");
   const [contactName, setContactName] = useState("");
   const [meetingDate, setMeetingDate] = useState("");
   const [notes, setNotes] = useState("");
+
+  // テキストモード
+  const [transcript, setTranscript] = useState("");
+
+  // 音声モード
+  const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessResult | null>(null);
 
-  const handleSubmit = async () => {
+  useEffect(() => {
+    return () => {
+      if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+    };
+  }, []);
+
+  const switchMode = (next: InputMode) => {
+    setMode(next);
+    setError(null);
+  };
+
+  const handleApiError = (err: unknown) => {
+    if (err instanceof ApiRequestError) {
+      setError(`サーバーエラー (HTTP ${err.status}): ${err.message}`);
+    } else if (err instanceof TypeError) {
+      setError(`サーバーに接続できませんでした（${err.message}）。しばらくしてから再度お試しください。`);
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`処理中に予期しないエラーが発生しました: ${message}`);
+    }
+  };
+
+  // ---------------- テキストモード ----------------
+  const handleSubmitText = async () => {
     if (transcript.trim().length < MIN_TRANSCRIPT_LENGTH || !companyName.trim()) {
       setError("文字起こしテキスト（10文字以上）と店舗名は必須です");
       return;
@@ -51,44 +97,176 @@ export function ProcessPanel() {
       setResult(data);
       setTranscript("");
     } catch (err) {
-      if (err instanceof ApiRequestError) {
-        setError(`サーバーエラー (HTTP ${err.status}): ${err.message}`);
-      } else if (err instanceof TypeError) {
-        setError(`サーバーに接続できませんでした（${err.message}）。しばらくしてから再度お試しください。`);
-      } else {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(`処理中に予期しないエラーが発生しました: ${message}`);
-      }
+      handleApiError(err);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // ---------------- 音声モード ----------------
+  const validateAndSetFile = (candidate: File | undefined) => {
+    if (!candidate) return;
+    const ext = candidate.name.slice(candidate.name.lastIndexOf(".")).toLowerCase();
+    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+      setError(`未対応の形式です: ${ext}（対応形式: ${SUPPORTED_EXTENSIONS.join(", ")}）`);
+      return;
+    }
+    if (candidate.size > MAX_FILE_SIZE) {
+      setError("ファイルサイズが100MBを超えています");
+      return;
+    }
+    setError(null);
+    setFile(candidate);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    validateAndSetFile(e.dataTransfer.files?.[0]);
+  };
+
+  const pollAudioJobStatus = (jobId: string) => {
+    pollTimeoutRef.current = setTimeout(async () => {
+      try {
+        const status = await getProcessAudioStatus(jobId);
+        if (status.status === "pending") {
+          pollAudioJobStatus(jobId);
+          return;
+        }
+        setIsLoading(false);
+        if (status.status === "completed" && status.result) {
+          setResult(status.result);
+          setFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        } else {
+          setError(status.error ?? "音声処理に失敗しました");
+        }
+      } catch (err) {
+        setIsLoading(false);
+        handleApiError(err);
+      }
+    }, POLL_INTERVAL_MS);
+  };
+
+  const handleSubmitAudio = async () => {
+    if (!file || !companyName.trim()) {
+      setError("音声ファイルと店舗名は必須です");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const { job_id } = await processAudio({
+        file,
+        companyName: companyName.trim(),
+        corporateName: corporateName.trim() || undefined,
+        contactName: contactName.trim() || undefined,
+        meetingDate: meetingDate || undefined,
+        notes: notes.trim() || undefined,
+      });
+      pollAudioJobStatus(job_id);
+    } catch (err) {
+      setIsLoading(false);
+      handleApiError(err);
+    }
+  };
+
+  const isSubmitDisabled =
+    isLoading ||
+    !companyName.trim() ||
+    (mode === "text"
+      ? transcript.trim().length < MIN_TRANSCRIPT_LENGTH
+      : !file);
+
   return (
     <div className="flex flex-col gap-6">
       <Card.Root>
         <Card.Header>
-          <Card.Title>商談テキストを解析</Card.Title>
+          <Card.Title>商談を解析</Card.Title>
           <Card.Description>
-            文字起こし済みの商談テキストを貼り付けると、Claude API が自動でディスカッション項目を抽出します
+            {mode === "text"
+              ? "文字起こし済みの商談テキストを貼り付けると、Claude API が自動でディスカッション項目を抽出します"
+              : "商談の録音ファイルをアップロードすると、Whisper による文字起こし後に Claude API が自動でディスカッション項目を抽出します"}
           </Card.Description>
         </Card.Header>
         <Card.Content className="flex flex-col gap-5">
-          <TextField.Root
-            value={transcript}
-            onChange={setTranscript}
-            isRequired
-            className="flex flex-col gap-1.5"
-          >
-            <Label className="flex items-center gap-1.5">
-              <FileText className="h-4 w-4" />
-              文字起こしテキスト
-            </Label>
-            <TextArea
-              placeholder="商談の文字起こしテキストをここに貼り付けてください"
-              rows={10}
-            />
-          </TextField.Root>
+          <div className="flex gap-2">
+            <Button
+              variant={mode === "text" ? "primary" : "outline"}
+              onClick={() => switchMode("text")}
+              isDisabled={isLoading}
+            >
+              <FileText className="mr-1.5 h-4 w-4" /> テキストを貼り付け
+            </Button>
+            <Button
+              variant={mode === "audio" ? "primary" : "outline"}
+              onClick={() => switchMode("audio")}
+              isDisabled={isLoading}
+            >
+              <FileAudio className="mr-1.5 h-4 w-4" /> 録音をアップロード
+            </Button>
+          </div>
+
+          {mode === "text" ? (
+            <TextField.Root
+              value={transcript}
+              onChange={setTranscript}
+              isRequired
+              className="flex flex-col gap-1.5"
+            >
+              <Label className="flex items-center gap-1.5">
+                <FileText className="h-4 w-4" />
+                文字起こしテキスト
+              </Label>
+              <TextArea
+                placeholder="商談の文字起こしテキストをここに貼り付けてください"
+                rows={10}
+              />
+            </TextField.Root>
+          ) : (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-10 text-center transition ${
+                isDragging
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30"
+                  : "border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900/50"
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={SUPPORTED_EXTENSIONS.join(",")}
+                className="hidden"
+                onChange={(e) => validateAndSetFile(e.target.files?.[0])}
+              />
+              {file ? (
+                <>
+                  <FileAudio className="h-8 w-8 text-blue-600" />
+                  <p className="font-medium">{file.name}</p>
+                  <p className="text-sm text-neutral-500">
+                    {(file.size / (1024 * 1024)).toFixed(1)} MB — クリックして変更
+                  </p>
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="h-8 w-8 text-neutral-400" />
+                  <p className="font-medium">録音ファイルをドラッグ&ドロップ</p>
+                  <p className="text-sm text-neutral-500">
+                    または クリックして選択（MP3 / WAV / M4A / FLAC / OGG、最大100MB）
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <TextField.Root
@@ -149,14 +327,27 @@ export function ProcessPanel() {
             </Alert.Root>
           )}
 
+          {isLoading && mode === "audio" && (
+            <div className="flex flex-col gap-2">
+              <ProgressBar.Root isIndeterminate>
+                <ProgressBar.Track>
+                  <ProgressBar.Fill />
+                </ProgressBar.Track>
+              </ProgressBar.Root>
+              <p className="flex items-center gap-2 text-sm text-neutral-500">
+                <Spinner size="sm" /> 音声解析中です（数十秒〜数分かかる場合があります）…
+              </p>
+            </div>
+          )}
+
           <Button
-            onClick={handleSubmit}
-            isDisabled={transcript.trim().length < MIN_TRANSCRIPT_LENGTH || !companyName.trim() || isLoading}
+            onClick={mode === "text" ? handleSubmitText : handleSubmitAudio}
+            isDisabled={isSubmitDisabled}
             className="self-start"
           >
             {isLoading ? (
               <span className="flex items-center gap-2">
-                <Spinner size="sm" /> 解析中...
+                <Spinner size="sm" /> 処理中...
               </span>
             ) : (
               "解析を開始"

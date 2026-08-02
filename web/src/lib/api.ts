@@ -2,6 +2,8 @@ import type {
   CardResponse,
   CorporateCardResponse,
   ListMeetingsResponse,
+  ProcessJobStartResponse,
+  ProcessJobStatusResponse,
   ProcessResult,
   SearchResponse,
 } from "./types";
@@ -54,6 +56,40 @@ export async function analyzeTranscript(params: {
   });
 
   return handleResponse<ProcessResult>(response);
+}
+
+export async function processAudio(params: {
+  file: File;
+  companyName: string;
+  corporateName?: string;
+  contactName?: string;
+  meetingDate?: string;
+  notes?: string;
+}): Promise<ProcessJobStartResponse> {
+  const formData = new FormData();
+  formData.append("file", params.file);
+  formData.append("company_name", params.companyName);
+  if (params.corporateName) formData.append("corporate_name", params.corporateName);
+  if (params.contactName) formData.append("contact_name", params.contactName);
+  if (params.meetingDate) formData.append("meeting_date", params.meetingDate);
+  if (params.notes) formData.append("notes", params.notes);
+
+  const response = await fetch(`${API_BASE}/api/process-audio`, {
+    method: "POST",
+    body: formData,
+  });
+
+  return handleResponse<ProcessJobStartResponse>(response);
+}
+
+export async function getProcessAudioStatus(
+  jobId: string,
+): Promise<ProcessJobStatusResponse> {
+  const response = await fetch(
+    `${API_BASE}/api/process-audio/status/${encodeURIComponent(jobId)}`,
+  );
+
+  return handleResponse<ProcessJobStatusResponse>(response);
 }
 
 export async function listMeetings(params?: {
