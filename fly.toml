@@ -27,5 +27,5 @@ primary_region = 'nrt'
 [[vm]]
   memory = '4gb'
   cpu_kind = 'shared'
-  cpus = 1
+  cpus = 2
   memory_mb = 4096
