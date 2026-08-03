@@ -335,7 +335,7 @@ export function ProcessPanel() {
                 </ProgressBar.Track>
               </ProgressBar.Root>
               <p className="flex items-center gap-2 text-sm text-neutral-500">
-                <Spinner size="sm" /> 音声解析中です（数十秒〜数分かかる場合があります）…
+                <Spinner size="sm" /> 音声解析中です（長い録音の場合、数十分かかることがあります）…
               </p>
             </div>
           )}
