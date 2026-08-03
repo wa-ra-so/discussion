@@ -197,6 +197,8 @@ python -m src.main --help
 
 **フロントエンドが API に接続できない（ローカル開発時）**: `web/.env.local` の `NEXT_PUBLIC_API_URL` がバックエンドの起動アドレスと一致しているか確認してください。本番ビルドでは同一オリジン配信のため空文字列（相対パス）を使います。
 
+**音声処理でサーバーが再起動を繰り返す（本番）**: Fly.io の「Machines」タブに "exhausted its maximum restart attempts" と出る場合、Whisperモデルの読み込み＋推論でメモリ不足（OOM）になっている可能性が高いです。`fly.toml` の `[[vm]]` の `memory`/`memory_mb` を増やしてください（目安: Whisper "base" モデルなら最低4GB）。
+
 ## テスト
 
 ```bash
