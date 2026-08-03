@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import tempfile
 import uuid
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import datetime
 from typing import Optional
 
@@ -136,6 +137,12 @@ async def process_transcript(
 # ============================================================================
 # PROCESS-AUDIO ENDPOINT - 録音ファイルの処理（非同期ジョブ方式）
 # ============================================================================
+# 音声処理の最大待ち時間。Whisperのffmpeg経由の音声デコードがまれに
+# ハングしたまま返ってこないケースがあり、その場合ジョブが永久に
+# 'pending' のままになってしまう。タイムアウトさせて必ず failed に落とす。
+AUDIO_PROCESSING_TIMEOUT_SECONDS = 600
+
+
 def _run_audio_processing_job(
     job_id: str,
     tmp_path: Path,
@@ -151,9 +158,14 @@ def _run_audio_processing_job(
     BackgroundTasks は同期関数をスレッドプールで実行するため、
     イベントループ（＝他のリクエスト、特にステータス確認のポーリング）を
     ブロックしない。
+
+    実処理はさらに別スレッドで実行し、AUDIO_PROCESSING_TIMEOUT_SECONDS を
+    超えたらタイムアウト扱いにする（ffmpeg/Whisperがハングして戻ってこない
+    場合に、ジョブが永久に pending のまま残るのを防ぐため）。
     """
     db = get_db_manager()
-    try:
+
+    def _process() -> DiscussionRecord:
         pipeline = get_pipeline()
         record, _ = pipeline.process_and_save(
             audio_file=tmp_path,
@@ -163,6 +175,25 @@ def _run_audio_processing_job(
             meeting_date=meeting_date,
             notes=notes,
         )
+        return record
+
+    # 通常の with 文（shutdown(wait=True)）だとタイムアウト後も、ハングした
+    # ワーカースレッドの終了を待ってブロックしてしまい意味がなくなるため、
+    # shutdown(wait=False) で切り離す。ハングしたスレッド自体はプロセスの
+    # 生存中はリークするが、ジョブのステータス更新をブロックしないことを優先する。
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(_process)
+        try:
+            record = future.result(timeout=AUDIO_PROCESSING_TIMEOUT_SECONDS)
+        except FutureTimeoutError:
+            executor.shutdown(wait=False)
+            raise TimeoutError(
+                f"音声処理が{AUDIO_PROCESSING_TIMEOUT_SECONDS}秒以内に完了しませんでした。"
+                "ファイルが長すぎるか、音声デコードでの問題が発生している可能性があります。"
+            )
+        else:
+            executor.shutdown(wait=False)
 
         try:
             record_id = db.save_record(record)
