@@ -254,6 +254,39 @@
     };
     function categoryLabel(c) { return CATEGORY_LABELS[c] || c; }
 
+    var SECTION_LABELS = {
+      recruitment: '①採用・人手', sales: '②集客・売上',
+      booking_efficiency: '③予約・業務効率', inbound: '④インバウンド集客'
+    };
+    var SECTION_ORDER = ['recruitment', 'sales', 'booking_efficiency', 'inbound'];
+
+    // ヒアリング項目チェックリストを、セクションごとにグルーピングして表示する
+    // （AmpTalk等の「ヒアリング項目を聞けているか」の自動チェックを参考にした表示）
+    function renderHearingChecklist(checklist) {
+      if (!checklist || checklist.length === 0) return '';
+      var covered = checklist.filter(function (i) { return i.covered; }).length;
+      var bySection = {};
+      checklist.forEach(function (item) {
+        (bySection[item.section] = bySection[item.section] || []).push(item);
+      });
+
+      var html = '<div class="section-title">ヒアリング項目チェック（' + covered + ' / ' + checklist.length + '）</div>';
+      SECTION_ORDER.forEach(function (section) {
+        var items = bySection[section];
+        if (!items || items.length === 0) return;
+        html += '<div style="margin: 8px 0 4px; font-size:12px; font-weight:700; color:var(--text-muted);">' +
+          escapeHtml(SECTION_LABELS[section] || section) + '</div>';
+        html += items.map(function (item) {
+          var icon = item.covered
+            ? '<span class="chip success" style="min-width:20px; text-align:center;">✓</span>'
+            : '<span class="chip" style="min-width:20px; text-align:center; opacity:.5;">−</span>';
+          return '<div class="issue-row" title="' + escapeHtml(item.evidence || '') + '">' + icon +
+            '<span' + (item.covered ? '' : ' style="color:var(--text-muted);"') + '>' + escapeHtml(item.label) + '</span></div>';
+        }).join('');
+      });
+      return html;
+    }
+
     // ---------- テキスト解析 ----------
     function submitProcess() {
       var transcript = document.getElementById('p-transcript').value.trim();
@@ -310,7 +343,8 @@
         '<div><div class="muted">検出網羅率</div><div style="font-weight:600">' + Math.round((record.confidence_score || 0) * 100) + '%</div></div>' +
         '</div>' +
         (record.summary ? '<div class="section-title">要約</div><p style="font-size:13px;">' + escapeHtml(record.summary) + '</p>' : '') +
-        (issuesHtml ? '<div class="section-title">優先課題</div>' + issuesHtml : '');
+        (issuesHtml ? '<div class="section-title">優先課題</div>' + issuesHtml : '') +
+        renderHearingChecklist(record.hearing_checklist);
       box.style.display = 'block';
     }
 
@@ -441,6 +475,8 @@
             '<span>' + escapeHtml(issue.issue) + '</span>' + priorityDots(issue.priority) + '</div>';
         }).join('');
       }
+
+      html += renderHearingChecklist(latest.hearing_checklist);
 
       html += '<div class="section-title">商談履歴</div>';
       html += card.all_records.map(function (r) {

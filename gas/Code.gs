@@ -20,6 +20,7 @@ const MEETINGS_HEADERS = [
   'meeting_id', 'corporate_name', 'company_name', 'contact_name',
   'meeting_date', 'created_at', 'confidence_score', 'summary',
   'discussions_json', 'priority_issues_json', 'dx_solutions_json', 'notes',
+  'hearing_checklist_json',
 ];
 
 const ISSUES_HEADERS = [
@@ -68,13 +69,62 @@ function analyzeTranscript(params) {
 // ルールベース抽出エンジン（外部AI APIなし）
 // ============================================================================
 
-// カテゴリ判定用キーワード（①採用・人手 ②集客・売上 ③予約・業務効率 ④インバウンド集客）
-const CATEGORY_KEYWORDS_ = {
-  recruitment: ['採用', '人手', 'スタッフ', '求人', 'アルバイト', 'パート', '社員', '人材', '離職', '欠員', '募集'],
-  sales: ['売上', '客単価', '集客', '客数', '稼働率', '客層', '来店', '売り上げ', '回転率', '席稼働'],
-  booking_efficiency: ['予約', '発注', 'オペレーション', '電話対応', 'ダブルブッキング', 'システム', '業務効率', '注文', 'レジ'],
-  inbound: ['インバウンド', '外国人', '多言語', '英語対応', '海外', '訪日'],
-};
+// ============================================================================
+// 商談ヒアリングシートの項目チェックリスト
+// 元の食べログ商談ヒアリングシート（schema/discussion_schema.json）の各項目を
+// 文字起こしから検出できるかどうかチェックする。AmpTalk等の商談解析ツールが
+// 持つ「ヒアリング項目を聞けているか」の自動チェック機能を参考にした。
+// カテゴリ単位のキーワード（discussions/priority_issues の判定用）は、
+// この項目リストのキーワードを束ねて動的に作る（キーワードの重複管理を避け、
+// 網羅性も高める）。
+// ============================================================================
+const HEARING_ITEMS_ = [
+  // ①採用・人手
+  { section: 'recruitment', id: 'current_staff', label: '現在のスタッフ構成', keywords: ['社員数', '従業員数', 'スタッフ数', '正社員', 'パートさん', 'アルバイトさん', '人数構成', '何人体制'] },
+  { section: 'recruitment', id: 'ideal_staff', label: '理想のスタッフ体制', keywords: ['理想の人数', '増員', 'あと何人', '増やしたい人数'] },
+  { section: 'recruitment', id: 'past_recruitment', label: '過去の求人・採用実績', keywords: ['求人媒体', '採用コスト', '応募数', '求人サイト', 'indeed', 'タウンワーク', '求人広告'] },
+  { section: 'recruitment', id: 'recruitment_budget', label: '採用予算', keywords: ['採用予算', '求人費用', '採用にかける費用'] },
+  { section: 'recruitment', id: 'desired_talent', label: '求める人材像', keywords: ['どんな人材', '欲しい人物像', '求める人物'] },
+  { section: 'recruitment', id: 'hiring_timeline', label: '採用したい時期', keywords: ['いつまでに採用', '急募', '早急に採用'] },
+  { section: 'recruitment', id: 'recruitment_initiatives', label: '採用面での現在の取り組み', keywords: ['採用活動', '求人施策', '紹介制度', '採用ホームページ'] },
+  { section: 'recruitment', id: 'staffing_general', label: '人手・スタッフ全般', keywords: ['人手', 'スタッフ', '求人', 'アルバイト', 'パート', '社員', '人材', '離職', '欠員', '募集', '採用'] },
+
+  // ②集客・売上
+  { section: 'sales', id: 'average_customer_spend', label: '客単価', keywords: ['客単価', 'ランチ単価', 'ディナー単価', '単価'] },
+  { section: 'sales', id: 'seat_utilization', label: '席稼働率', keywords: ['稼働率', '席の埋まり', '空席状況'] },
+  { section: 'sales', id: 'turnover_rate', label: '回転率', keywords: ['回転率', '回転数'] },
+  { section: 'sales', id: 'fl_ratio', label: 'FL比率（原価・人件費）', keywords: ['fl比率', '原価率', '人件費率', 'コスト率'] },
+  { section: 'sales', id: 'customer_segment', label: '客層', keywords: ['客層', 'ターゲット層', '年齢層', 'お客さんの層', '客層は'] },
+  { section: 'sales', id: 'usage_scenes', label: '利用シーン', keywords: ['利用シーン', 'デート', '接待', '宴会', '記念日利用'] },
+  { section: 'sales', id: 'other_media_roi', label: '他媒体の活用状況', keywords: ['ホットペッパー', 'ぐるなび', 'sns', 'instagram', 'インスタ', 'googleビジネス', '他媒体'] },
+  { section: 'sales', id: 'sales_initiatives', label: '集客面での現在の取り組み', keywords: ['集客施策', '販促', 'キャンペーン', '売上', '集客', '客数', '来店', '売り上げ'] },
+
+  // ③予約・業務効率
+  { section: 'booking_efficiency', id: 'current_reservation_method', label: '現在の予約方法', keywords: ['予約方法', '台帳', '紙の予約', '予約は電話', '予約システム'] },
+  { section: 'booking_efficiency', id: 'net_reservation_status', label: 'ネット予約の開放状況', keywords: ['ネット予約', '全席開放', 'オンライン予約'] },
+  { section: 'booking_efficiency', id: 'site_controller_usage', label: 'サイトコントローラーの利用', keywords: ['サイトコントローラー'] },
+  { section: 'booking_efficiency', id: 'reservation_channels', label: '予約チャネル（食べログ等）', keywords: ['食べログ', 'ホットペッパー', 'ぐるなび', '一休', 'retty', '予約チャネル'] },
+  { section: 'booking_efficiency', id: 'phone_response', label: '電話対応の頻度・本数', keywords: ['電話対応', '電話の本数', '電話が鳴', '電話が多'] },
+  { section: 'booking_efficiency', id: 'double_booking_issues', label: 'ダブルブッキングの発生状況', keywords: ['ダブルブッキング', '重複予約', '予約が重な'] },
+  { section: 'booking_efficiency', id: 'ordering_method', label: '発注方法', keywords: ['発注', 'fax', '電話発注', '業者に連絡', 'モバイルオーダー'] },
+  { section: 'booking_efficiency', id: 'daily_ordering_time', label: '発注業務にかかる時間', keywords: ['発注時間', '発注にかかる時間', '発注業務'] },
+  { section: 'booking_efficiency', id: 'ordering_responsible', label: '発注担当者', keywords: ['発注担当', '誰が発注', '発注は誰'] },
+  { section: 'booking_efficiency', id: 'booking_general', label: '予約・業務効率全般', keywords: ['オペレーション', 'システム', '業務効率', '注文', 'レジ'] },
+
+  // ④インバウンド集客
+  { section: 'inbound', id: 'monthly_foreign_guests', label: '月間の外国人客数', keywords: ['外国人', 'インバウンド', '訪日', '海外のお客様', '外国のお客様'] },
+  { section: 'inbound', id: 'multilingual_support', label: '多言語対応の状況', keywords: ['多言語', '英語メニュー', '通訳', '外国語対応', '英語対応'] },
+];
+
+// 上記チェックリストのキーワードを section ごとに束ねたもの
+// （discussions / priority_issues のカテゴリ判定に使う）
+const CATEGORY_KEYWORDS_ = (function () {
+  const map = {};
+  HEARING_ITEMS_.forEach(function (item) {
+    map[item.section] = (map[item.section] || []).concat(item.keywords);
+  });
+  return map;
+})();
 
 // 課題を示唆する表現（このいずれかを含む文だけを priority_issues の候補にする）
 // 「問題なく」「悪くない」のような否定表現を誤検出しないよう、
@@ -106,6 +156,18 @@ const CATEGORY_ORDER_ = ['recruitment', 'sales', 'booking_efficiency', 'inbound'
  */
 function extractRuleBased_(transcript) {
   const sentences = splitSentences_(transcript);
+
+  // ヒアリング項目チェックリスト: 各項目が文字起こしの中で言及されているかを判定
+  const hearingChecklist = HEARING_ITEMS_.map(function (item) {
+    const matched = sentences.filter(function (s) { return containsAny_(s, item.keywords); });
+    return {
+      section: item.section,
+      id: item.id,
+      label: item.label,
+      covered: matched.length > 0,
+      evidence: matched.length > 0 ? matched[0] : null,
+    };
+  });
 
   const discussions = {};
   const priorityIssues = [];
@@ -145,9 +207,10 @@ function extractRuleBased_(transcript) {
     ? '検出された課題: ' + priorityIssues.map(function (i) { return i.issue; }).join(' / ')
     : 'キーワードベースの解析では明確な課題は検出されませんでした。文字起こし内容を直接ご確認ください。';
 
-  // 検出網羅率（4カテゴリ中いくつでキーワードがヒットしたか）を参考値として返す。
-  // AIによる意味的な確信度ではない点に注意。
-  const confidenceScore = Object.keys(matchedCategories).length / CATEGORY_ORDER_.length;
+  // 検出網羅率: ヒアリング項目のうち文字起こしから検出できた割合。
+  // AIによる意味的な確信度ではなく、あくまでキーワードマッチの機械的な値。
+  const coveredCount = hearingChecklist.filter(function (i) { return i.covered; }).length;
+  const confidenceScore = hearingChecklist.length > 0 ? coveredCount / hearingChecklist.length : 0;
 
   return {
     discussions: discussions,
@@ -155,6 +218,7 @@ function extractRuleBased_(transcript) {
     dx_solutions: dxSolutions,
     summary: summary,
     confidence_score: confidenceScore,
+    hearing_checklist: hearingChecklist,
   };
 }
 
@@ -166,7 +230,8 @@ function splitSentences_(text) {
 }
 
 function containsAny_(text, keywords) {
-  return keywords.some(function (kw) { return text.indexOf(kw) !== -1; });
+  const lower = String(text).toLowerCase();
+  return keywords.some(function (kw) { return lower.indexOf(kw.toLowerCase()) !== -1; });
 }
 
 function buildRecord_(structured, params) {
@@ -176,6 +241,7 @@ function buildRecord_(structured, params) {
 
   const priorityIssues = Array.isArray(structured.priority_issues) ? structured.priority_issues : [];
   const dxSolutions = structured.dx_solutions || {};
+  const hearingChecklist = Array.isArray(structured.hearing_checklist) ? structured.hearing_checklist : [];
 
   return {
     meeting_id: meetingId,
@@ -189,6 +255,7 @@ function buildRecord_(structured, params) {
     discussions: structured.discussions || {},
     priority_issues: priorityIssues,
     dx_solutions: dxSolutions,
+    hearing_checklist: hearingChecklist,
     notes: params.notes || null,
   };
 }
@@ -229,6 +296,7 @@ function saveRecord_(record) {
       JSON.stringify(record.priority_issues),
       JSON.stringify(record.dx_solutions),
       record.notes || '',
+      JSON.stringify(record.hearing_checklist || []),
     ]);
 
     if (record.priority_issues.length > 0) {
@@ -344,6 +412,7 @@ function getCompanyCard(companyName) {
       discussions: safeJsonParse_(m.discussions_json, {}),
       priority_issues: safeJsonParse_(m.priority_issues_json, []),
       dx_solutions: safeJsonParse_(m.dx_solutions_json, {}),
+      hearing_checklist: safeJsonParse_(m.hearing_checklist_json, []),
       notes: m.notes || null,
     };
   });
